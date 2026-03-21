@@ -1,0 +1,16 @@
+# Przetwarzanie danych
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Uczenie maszynowe i podział danych
+scikit-learn>=1.3.0
+
+# Głębokie uczenie (Sieci Neuronowe)
+torch>=2.0.0
+
+# XGBoost
+xgboost>=2.0.0
+
+# Opcjonalnie: do wykresów (przydadzą się na koniec do raportu)
+matplotlib>=3.7.0
+seaborn>=0.12.0
