@@ -1,1 +1,68 @@
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+venv/
+env/
+.env/
 .venv/
+
+# =========================
+# Dane (Data)
+# =========================
+# Ignorujemy wszystko w folderach z danymi, oprócz plików .gitkeep (żeby Git zachował puste foldery)
+
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Ogólnie ignorujemy duże pliki z danymi
+*.csv
+*.tsv
+*.dat
+
+# =========================
+# Modele i Wagi (Machine Learning)
+# =========================
+# Ignorujemy zapisane wagi modeli PyTorch i XGBoost
+
+*.pth
+*.pt
+*.pkl
+*.model
+*.bin
+*.joblib
+*.h5
+*.hdf5
+
+# =========================
+# Logi i testy
+# =========================
+
+*.log
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+
+# =========================
+# Pliki systemowe i IDE
+# =========================
+# Windows / macOS
+
+Thumbs.db
+.DS_Store
+
+# IDE (VS Code, PyCharm itp.)
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter Notebook 
+
+.ipynb_checkpoints/
