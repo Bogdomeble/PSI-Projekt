@@ -7,7 +7,7 @@ def main():
     print("=========================================\n")
     
     try:
-        # Odpalamy główną funkcję
+        # main function
         train_loader, val_loader, test_loader, xgb_data, input_dim = get_dataloaders()
         
         print("\n--- Data processed succesfully ---")
@@ -16,7 +16,7 @@ def main():
         print(f"Validation dataset:      {len(val_loader.dataset)} samples ({len(val_loader)} batches)")
         print(f"Testing dataset:    {len(test_loader.dataset)} samples ({len(test_loader)} batches)")
         
-        # Pobieramy testowo jeden Batch
+        # one batch for testing the data flow
         X_batch, y_batch = next(iter(train_loader))
         print(f"\n Shape of single X batch: {X_batch.shape} ->[batch_size, input_size]")
         print(f"Kształt pojedynczego batcha y: {y_batch.shape} -> [batch_size, 1]")
