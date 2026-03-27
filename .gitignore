@@ -63,6 +63,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# Jupyter Notebook 
+# Jupyter Notebook
 
 .ipynb_checkpoints/
