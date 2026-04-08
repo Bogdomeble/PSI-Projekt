@@ -6,10 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from src.config import *
 
-"""
-todo 22.03.2026r.  translate comments to english - done i guess?
 
-"""
 def load_and_clean_data(filepath):
     print(f"Reading data from: {filepath}")
     df = pd.read_csv(filepath)
