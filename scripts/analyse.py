@@ -7,71 +7,61 @@ from src.config import *
 from src.dataset import load_and_clean_data
 
 def main():
-    # 1. Wczytanie danych
+    # Load data
     df = load_and_clean_data(RAW_DATA_PATH)
 
-    # --- Wstępne czyszczenie ---
-    # TotalCharges jest wczytywane jako object, musimy zamienić na numeric
+    # set up save dir for later
+    save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "plots")
+    os.makedirs(save_dir, exist_ok=True)
+
+    # initial cleanup
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-    df.dropna(inplace=True) # Usuwamy puste rekordy powstałe przy konwersji
+    df.dropna(inplace=True)
 
-    # 2. ANALIZA STATYSTYCZNA I OPISOWA
-    print("--- PODSTAWOWE INFORMACJE ---")
-    print(f"Liczba rekordów: {df.shape[0]}")
-    print(f"Liczba kolumn: {df.shape[1]}")
-    print("\nTypy danych i braki:\n", df.info())
+    # basic info
+    print("--- BASIC INFORMATION ---")
+    print(f"Number of records: {df.shape[0]}")
+    print(f"Number of columns: {df.shape[1]}")
+    print("\nTypes and missing data:\n", df.info())
 
-    print("\n--- STATYSTYKI OPISOWE (Zmienne numeryczne) ---")
+    print("\n")
     print(df.describe())
 
-    # 3. ANALIZA PROPORCJI (Target Variable)
-    print("\n--- ROZKŁAD REZYGNACJI (CHURN) ---")
+    # target variable analysis
+    print("\n--- CHURN STATISTICS ---")
 
     churn_counts = df['Churn'].value_counts(normalize=True) * 100
 
     churn_yes = churn_counts.get(1.0, 0)
     churn_no = churn_counts.get(0.0, 0)
 
-    print(f"Procent klientów, którzy odeszli (1): {churn_yes:.2f}%")
-    print(f"Procent klientów, którzy zostali (0): {churn_no:.2f}%")
+    print(f"% of clients that left (1): {churn_yes:.2f}%")
+    print(f"% of clients that stayed (0): {churn_no:.2f}%")
 
-    # 4. WIZUALIZACJA I ZALEŻNOŚCI
+    # visualization
     sns.set_style("whitegrid")
     plt.figure(figsize=(18, 12))
 
-    # A. Rozkład Churn (Wykres kołowy)
     plt.subplot(2, 2, 1)
     df['Churn'].value_counts().plot.pie(autopct='%1.1f%%', colors=['#66b3ff','#ff9999'], startangle=90)
-    plt.title('Proporcja rezygnacji (Churn)')
+    plt.title('Churn pie plot')
 
-    # B. Miesięczne opłaty vs Churn (Histogram)
     plt.subplot(2, 2, 2)
     sns.histplot(data=df, x='MonthlyCharges', hue='Churn', multiple="stack", palette='magma')
-    plt.title('Miesięczne opłaty a rezygnacja')
+    plt.title('Monthly Charges vs Churn')
 
-    # C. Staż klienta (Tenure) vs Churn (Boxplot)
     plt.subplot(2, 2, 3)
     sns.boxplot(x='Churn', y='tenure', data=df, palette='Set2')
-    plt.title('Staż klienta (w miesiącach) a rezygnacja')
+    plt.title('Tenure vs Churn')
 
-    # D. Macierz korelacji (tylko dla cech numerycznych)
     plt.subplot(2, 2, 4)
     numeric_df = df.select_dtypes(include=[np.number])
     sns.heatmap(numeric_df.corr(), annot=False, cmap='coolwarm')
-    plt.title('Korelacje między zmiennymi numerycznymi')
+    plt.title('Correlation heatmap')
 
     plt.tight_layout()
-    plt.show()
-
-    # 5. ANALIZA ZMIENNYCH KATEGORIALNYCH (Segmentacja)
-    # Sprawdzamy wpływ rodzaju umowy na odejście
-    plt.figure(figsize=(10, 5))
-    sns.countplot(data=df, x='Contract', hue='Churn', palette='viridis')
-    plt.title('Wpływ rodzaju umowy na rezygnację')
-    plt.show()
-
-    print("\n--- ANALIZA ZAKOŃCZONA ---")
-
+    plt.savefig(os.path.join(save_dir, 'quad_churn_charges_tenure_heatmap.png'))
+    plt.close()
 
 if __name__ == "__main__":
     main()
