@@ -16,7 +16,7 @@
 - Skalowalność: Wzrost rozmiaru danych wejściowych w realistycznych proporcjach nie powinien zwiększać gwałtownie czasu wykonania modelu.
 - Bezpieczeństwo: Model nie powinien ujawniać w żaden sposób danych wrażliwych pochodzących od klientów.
 
-<p align="center"><figure class="figure"><p><img src="../images/kamienie.png" alt="" /></p>
+<p align="center"><figure class="figure"><p><img src="images/kamienie.png" alt="" /></p>
 </figure></p>
 
 ## Kamień Milowy 2
@@ -59,7 +59,7 @@ Churn: odpowiada na pytanie: „Czy w ciągu ostatniego miesiąca ten klient zre
 - Yes - Klient odszedł (Strata dla firmy).
 - No - Klient został.
 
-<p align="center"><figure class="figure"><p><img src="../images/data_sample.png" alt="" /></p>
+<p align="center"><figure class="figure"><p><img src="images/data_sample.png" alt="" /></p>
 </figure></p>
 
 Przeczyszczone dane są następnie przekazywane do funkcji `prepare_data_splits()`:
@@ -139,19 +139,19 @@ Podzielone dane następnie są owijane w DataLoader (do pytorcha) czy zwracane w
 
 ### Wykresy
 
-<p align="center"><figure class="figure"><p><img src="../images/1_class_balance.png" alt="" /></p>
+<p align="center"><figure class="figure"><p><img src="images/1_class_balance.png" alt="" /></p>
 </figure></p>
 
-<p align="center"><figure class="figure"><p><img src="../images/2_monthly_charges_boxplot.png" alt="" /></p>
+<p align="center"><figure class="figure"><p><img src="images/2_monthly_charges_boxplot.png" alt="" /></p>
 </figure></p>
 
-<p align="center"><figure class="figure"><p><img src="../images/3_contract_vs_churn.png" alt="" /></p>
+<p align="center"><figure class="figure"><p><img src="images/3_contract_vs_churn.png" alt="" /></p>
 </figure></p>
 
-<p align="center"><figure class="figure"><p><img src="../images/4_correlation_heatmap.png" alt="" /></p>
+<p align="center"><figure class="figure"><p><img src="images/4_correlation_heatmap.png" alt="" /></p>
 </figure></p>
 
-<p align="center"><figure class="figure"><p><img src="../images/5_charges_vs_churn.png" alt="" /></p>
+<p align="center"><figure class="figure"><p><img src="images/5_charges_vs_churn.png" alt="" /></p>
 </figure></p>
 
 1. Wykres słupkowy (Distribution of Churn - Rysunek 3) - Balans klas:
