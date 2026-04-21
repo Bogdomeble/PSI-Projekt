@@ -1,0 +1,37 @@
+Kamień milowy 3:
+Opis 
+W ramach projektu zdecydowano się na podejście hybrydowe, implementując dwa niezależne modele, aby porównać skuteczność algorytmów drzewiastych z sieciami neuronowymi w zadaniu klasyfikacji binarnej (Churn: Tak/Nie).
+Model 1: XGBoost (Extreme Gradient Boosting)
+Dlaczego: Jest to obecnie jeden z najskuteczniejszych algorytmów dla danych tabelarycznych. Świetnie radzi sobie z brakującymi danymi i nieliniowymi zależnościami.
+Kluczowe cechy implementacji:
+
+
+Zastosowano skalowanie wag klas (scale_pos_weight=2.76), aby zaradzić nierównowadze w zbiorze danych (więcej osób zostaje w sieci, niż z niej odchodzi).
+Ustawiono parametry zapobiegające overfittingowi: max_depth=4, subsample=0.8 oraz learning_rate=0.05.
+
+
+Plik: src/models/xgboost_model.py
+Model 2: Głęboka Sieć Neuronowa (PyTorch)
+Dlaczego: Pozwala na wychwycenie bardzo złożonych, ukrytych korelacji między cechami, które mogą umknąć algorytmom drzewiastym.
+
+
+Architektura (zaimplementowana w ChurnNeuralNet)
+
+
+Warstwy: Wejściowa -> 64 neurony -> 32 neurony -> Wyjściowa (1 neuron).
+Regularyzacja: Zastosowano warstwy Dropout (30% i 20%) oraz Batch Normalization, aby model był stabilny i nie "uczył się na pamięć" danych treningowych.
+Funkcja aktywacji: ReLU dla warstw ukrytych.
+
+
+Plik: src/models/neural_net.py
+
+
+Logika treningu (src/core/trainer.py)
+Zaimplementowano ustandaryzowaną pętlę treningową z użyciem optymalizatora Adam oraz funkcji straty BCEWithLogitsLoss (idealna dla klasyfikacji binarnej w PyTorch).
+Oczekiwany wynik
+Działające środowisko modelowania: Stworzono modularną strukturę kodu, która pozwala na łatwą wymianę modeli i hiperparametrów.
+
+
+Zaimplementowane modele					
+Klasa ChurnNeuralNet (PyTorch).
+Konfiguracja XGBClassifier (XGBoost).
