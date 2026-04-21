@@ -1,1 +1,1 @@
-#include "../headers.typ": *
+#import "../headers.typ": *
