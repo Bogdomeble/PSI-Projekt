@@ -9,3 +9,5 @@
 #include "stones/section1.typ"
 #pagebreak() // nowa strona
 #include "stones/section2.typ"
+#pagebreak()
+#include "stones/section3.typ"

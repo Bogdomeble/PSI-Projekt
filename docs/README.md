@@ -21,6 +21,10 @@
 
 ## Kamień Milowy 2
 
+ 
+
+### Opis
+
  Wybrany zbiór danych przedstawia bazę klientów fikcyjnej firmy telekomunikacyjnej. Głównym celem pracy z tymi danymi jest przewidywanie, który klient zrezygnuje z usług firmy / po jakim czasie zakończy on umowę z firmą (czyli przewidywanie zjawiska Churn). Aby łatwiej było go zrozumieć, te 21 kolumn można podzielić na 4 logiczne kategorie:
 
 1. Dane demograficzne (Kim jest klient?)
@@ -165,3 +169,153 @@ Podzielone dane następnie są owijane w DataLoader (do pytorcha) czy zwracane w
    Co widać: Współczynniki zależności. Na przykład na przecięciu tenure i Churn\_Num mamy współczynnik korelacji równy −0.35. Wniosek: Istnieje ujemna korelacja między stażem a odejściem. Oznacza to, że im dłużej ktoś jest z firmą (wyższe tenure), tym mniejsze prawdopodobieństwo, że zrezygnuje.
 
 1. Histogram ze stosami (Monthly Charges vs Churn - Rysunek 7) Co widać: “Duża fioletowa wieża” (zostający przy kwocie $20) oraz “szeroka różowa górka” (odchodzący w przedziale $70-$105). Wniosek: Uzupełnia to wykres pudełkowy. Firma ma ogromną rzeszę lojalnych klientów, którzy płacą bardzo mało (prawdopodobnie utrzymują najtańszą, podstawową usługę). Problem rezygnacji dotyka głównie klientów o średnich i wysokich rachunkach.
+
+## Kamień Milowy 3
+
+ 
+
+### Opis
+
+ W ramach projektu zdecydowano się na podejście hybrydowe, implementując dwa niezależne modele, aby porównać skuteczność algorytmów drzewiastych z sieciami neuronowymi w zadaniu klasyfikacji binarnej (Churn: Tak/Nie).
+
+Zaimplementowane modele:
+
+- Konfiguracja XGBClassifier (XGBoost).
+- Klasa ChurnNeuralNet (PyTorch).
+
+### Model 1: XGBoost (Extreme Gradient Boosting)
+
+**Dlaczego:** Jest to obecnie jeden z najskuteczniejszych algorytmów dla danych tabelarycznych. Świetnie radzi sobie z brakującymi danymi i nieliniowymi zależnościami.
+
+- **Kluczowe cechy implementacji:**
+  - Zastosowano **skalowanie wag klas (scale\_pos\_weight=2.76)**, aby zaradzić nierównowadze w zbiorze danych (więcej osób zostaje w sieci, niż z niej odchodzi).
+  - Ustawiono parametry zapobiegające overfittingowi: max\_depth=4, subsample=0.8 oraz learning\_rate=0.05.
+- **Plik:** `src/models/xgboost_model.py`
+
+`import xgboost as xgb
+
+def get_xgboost_model():
+    """
+    Initializes and returns an XGBoost model ready for training.
+    """
+    # We calculate the class weight based on  plot 1:
+    # (Number of customers staying / Number leaving) = approx. 5174 / 1869 ≈ 2.76
+    # This will help the model handle the minority class (churned customers) better
+
+    model = xgb.XGBClassifier(
+        n_estimators=100,  # Number of decision trees
+        max_depth=4,  # Maximum tree depth (prevents overfitting)
+        learning_rate=0.05,  # Learning rate
+        subsample=0.8,  # Uses 80% of data to build each tree
+        colsample_bytree=0.8,  # Uses 80% of features to build each tree
+        scale_pos_weight=2.76,  # Class balancing!
+        eval_metric="logloss",  # Evaluation metric during training
+        random_state=42,  # Ensures reproducibility
+        n_jobs=-1,  # Uses all CPU cores
+    )
+
+    return model
+`
+
+### Model 2: Głęboka Sieć Neuronowa (PyTorch)
+
+ **Dlaczego:** Pozwala na wychwycenie bardzo złożonych, ukrytych korelacji między cechami, które mogą umknąć algorytmom drzewiastym.
+
+- **Architektura (zaimplementowana w ChurnNeuralNet)**
+  - **Warstwy:** Wejściowa -\> 64 neurony -\> 32 neurony -\> Wyjściowa (1 neuron).
+  - **Regularyzacja:**Zastosowano warstwy **Dropout** (30% i 20%) oraz **Batch Normalization**, aby model był stabilny i nie „uczył się na pamięć” danych treningowych.
+  - **Funkcja aktywacji:** ReLU dla warstw ukrytych.
+- **Plik:** `src/models/xgboost_model.py`
+
+`import torch
+import torch.nn as nn
+
+class ChurnNeuralNet(nn.Module):
+    def __init__(self, input_dim):
+        super(ChurnNeuralNet, self).__init__()
+
+        # Define the network architecture
+        self.network = nn.Sequential(
+            # Input layer
+            nn.Linear(input_dim, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.3), # Randomly disables 30% of neurons to prevent memorization
+
+            # Hidden layer
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+
+            # Output layer
+            # 1 neuron, because we are doing binary classification (output is churn probability)
+            nn.Linear(32, 1)
+        )
+
+    def forward(self, x):
+        # Data passes through the network
+        # We do not use a Sigmoid layer here, because in PyTorch we will use
+        # BCEWithLogitsLoss, which is more numerically stable and includes Sigmoid internally!
+        return self.network(x)
+`
+
+**Logika treningu (src/core/trainer.py)**
+
+- Zaimplementowano ustandaryzowaną pętlę treningową z użyciem optymalizatora **Adam** oraz funkcji straty **BCEWithLogitsLoss** (idealna dla klasyfikacji binarnej w PyTorch).
+
+**Oczekiwany wynik**
+
+**Działające środowisko modelowania:** Stworzono modularną strukturę kodu, która pozwala na łatwą wymianę modeli i hiperparametrów. 
+
+### Wyniki
+
+<p align="center"><figure class="figure"><p><img src="images/model_shape.png" alt="" /></p>
+</figure></p>
+
+Modele są już zintegrowane z systemem metryk (Accuracy, F1-Score, Recall) w głównym skrypcie src/main.py. Wyniki dla obu modeli po podzieleniu datasetu na sekcje 70/15/15 (trening/test/walidacja) wyglądają następująco:
+
+<p align="center"><figure class="figure"><p><img src="images/stone3_results.png" alt="" /></p>
+</figure></p>
+
+<p align="center"><figure class="figure"><p><img src="images/confusion_matrix_pytorch.png" alt="" /></p>
+</figure></p>
+
+<p align="center"><figure class="figure"><p><img src="images/confusion_matrix_xgboost.png" alt="" /></p>
+</figure></p>
+
+#### Opis Metryk
+
+ **Accuracy (Dokładność)**
+
+- **Co mówi:** Jaki procent wszystkich decyzji modelu był poprawny?
+- **Wzór:** (Wszystkie dobre decyzje) / (Wszystkie przypadki)
+
+Z danych wynika, że ponad 80% klientów nie kończy umowy z firmą. Model będzie wybierał sztywno tą opcję w celu uzyskania jak największej dokładności i może “okłamywać” resztę analizy. Tej mierze należy ufać tylko, gdy liczba klientów odchodzących i zostających jest mniej więcej równa.
+
+**Recall (Czułość / Pełność)**
+
+- **Co mówi:** Ile osób z tych, które naprawdę odeszły, nasz model zdołał poprawnie wskazać?
+- **Wzór:** (Poprawnie wykryty Churn) / (Wszyscy, którzy faktycznie odeszli)
+
+To jest prawdopodobnie najważniejsza metryka dla działu utrzymania klienta. Jeśli Recall wynosi 0.80, to znaczy, że zidentyfikowaliśmy 80% osób planujących odejście. Pozostałe 20% to „uciekinierzy”, których nie zauważyliśmy i niestety straciliśmy. Chcemy, aby Recall był jak najwyższy, żeby nie przegapić żadnego klienta, którego można jeszcze uratować promocją.
+
+**F1-Score**
+
+- **Co mówi:** To średnia (harmoniczna) z Recall i Precision. Szuka balansu.
+
+#### Ogólne Porównanie
+
+ Mimo że sieć neuronowa (PyTorch) ma wyższą ogólną dokładność, to w tym konkretnym zadaniu (przewidywanie odejścia klientów) zdecydowanym zwycięzcą jest XGBoost.
+
+- Accuracy (Dokładność):
+  - PyTorch (79,75%) wypada lepiej niż XGBoost (75,40%).
+  - Interpretacja: Sieć neuronowa rzadziej się myli ogółem, ale prawdopodobnie wynika to z tego, że jest bardzo „ostrożna” i najczęściej przewiduje, że klient zostanie (bo takich klientów jest w bazie najwięcej).
+
+- Recall (Czułość):
+  - XGBoost: (82,14%) przewyższa PyTorch: (55%).
+  - Interpretacja: Tutaj jest najważniejsza różnica pomiędzy modelami. XGBoost poprawnie wykrywa aż 82% osób, które faktycznie chcą odejść. Sieć neuronowa wykrywa tylko 55% ,czyli prawie połowę uciekających klientów po prostu pomija. Tak wysoki wynik XGBoost to efekt zastosowania w kodzie parametru scale\_pos\_weight=2.76, który „zmusił” model do zwracania większej uwagi na klientów odchodzących.
+
+- F1-Score:
+  - XGBoost (63,89%) przewyższa PyTorch (59%).
+  - Interpretacja: F1-Score potwierdza, że choć XGBoost częściej się myli (niższe Accuracy), to jego ogólna wartość użytkowa w balansowaniu wykrywania zjawiska “Churnu” w tym zbiorze danych jest większa.
