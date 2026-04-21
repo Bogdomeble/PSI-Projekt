@@ -1,0 +1,2 @@
+Tutaj umieszczam małe fragmenty kodu funkcji z innych plików, w celu łatwiejszego załączenia w dokumencie.
+Co prawda skutkuje to trochę niedokładnością jak w innych miejscach się to zmieni, ale nie szkodzi
