@@ -1,5 +1,5 @@
 Kamień milowy 3:
-Opis 
+Opis
 W ramach projektu zdecydowano się na podejście hybrydowe, implementując dwa niezależne modele, aby porównać skuteczność algorytmów drzewiastych z sieciami neuronowymi w zadaniu klasyfikacji binarnej (Churn: Tak/Nie).
 Model 1: XGBoost (Extreme Gradient Boosting)
 Dlaczego: Jest to obecnie jeden z najskuteczniejszych algorytmów dla danych tabelarycznych. Świetnie radzi sobie z brakującymi danymi i nieliniowymi zależnościami.
@@ -32,6 +32,68 @@ Oczekiwany wynik
 Działające środowisko modelowania: Stworzono modularną strukturę kodu, która pozwala na łatwą wymianę modeli i hiperparametrów.
 
 
-Zaimplementowane modele					
+Zaimplementowane modele
 Klasa ChurnNeuralNet (PyTorch).
 Konfiguracja XGBClassifier (XGBoost).
+
+
+
+// kod do modeli ai
+
+import torch
+import torch.nn as nn
+
+class ChurnNeuralNet(nn.Module):
+    def __init__(self, input_dim):
+        super(ChurnNeuralNet, self).__init__()
+
+        # Define the network architecture
+        self.network = nn.Sequential(
+            # Input layer
+            nn.Linear(input_dim, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.3), # Randomly disables 30% of neurons to prevent memorization
+
+            # Hidden layer
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+
+            # Output layer
+            # 1 neuron, because we are doing binary classification (output is churn probability)
+            nn.Linear(32, 1)
+        )
+
+    def forward(self, x):
+        # Data passes through the network
+        # We do not use a Sigmoid layer here, because in PyTorch we will use
+        # BCEWithLogitsLoss, which is more numerically stable and includes Sigmoid internally!
+        return self.network(x)
+
+
+
+import xgboost as xgb
+
+def get_xgboost_model():
+    """
+    Initializes and returns an XGBoost model ready for training.
+    """
+    # We calculate the class weight based on  plot 1:
+    # (Number of customers staying / Number leaving) = approx. 5174 / 1869 ≈ 2.76
+    # This will help the model handle the minority class (churned customers) better
+
+    model = xgb.XGBClassifier(
+        n_estimators=100,        # Number of decision trees
+        max_depth=4,             # Maximum tree depth (prevents overfitting)
+        learning_rate=0.05,      # Learning rate
+        subsample=0.8,           # Uses 80% of data to build each tree
+        colsample_bytree=0.8,    # Uses 80% of features to build each tree
+        scale_pos_weight=2.76,   # Class balancing!
+        eval_metric='logloss',   # Evaluation metric during training
+        random_state=42,         # Ensures reproducibility
+        n_jobs=-1                # Uses all CPU cores
+    )
+
+    return model

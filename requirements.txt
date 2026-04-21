@@ -1,3 +1,4 @@
+
 # Przetwarzanie danych
 pandas>=2.0.0
 numpy>=1.24.0
@@ -8,6 +9,7 @@ scikit-learn>=1.3.0
 # Głębokie uczenie (Sieci Neuronowe)
 torch>=2.0.0
 torchinfo>=1.7.0
+torchviz
 # XGBoost
 xgboost>=2.0.0
 
