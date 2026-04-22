@@ -36,9 +36,6 @@ Zaimplementowane modele:
 *Logika treningu (src/core/trainer.py)*
 - Zaimplementowano ustandaryzowaną pętlę treningową z użyciem optymalizatora *Adam* oraz funkcji straty *BCEWithLogitsLoss* (idealna dla klasyfikacji binarnej w PyTorch).
 
-*Oczekiwany wynik*
-
-*Działające środowisko modelowania:* Stworzono modularną strukturę kodu, która pozwala na łatwą wymianę modeli i hiperparametrów.
 == Wyniki
 #figure(
   image("../images/model_shape.png"),
@@ -56,12 +53,18 @@ Modele są już zintegrowane z systemem metryk (Accuracy, F1-Score, Recall) w g�
 #figure(
   image("../images/confusion_matrix_pytorch.png", width:90%),
   caption: [Confusion matrix dla pytorcha]
-) <confusion-pytorch>
+) <pytorch-confusion>
 
 #figure(
   image("../images/confusion_matrix_xgboost.png", width:90%),
   caption: [Confusion matrix dla xgboosta]
-) <confusion-xgboost>
+) <xgboost-confusion>
+
+
+#figure(
+  image("../images/xgboost_feature_importance.png"),
+  caption: [Najważniejsze zmienne dla xgboosta]
+) <xgboost-importance>
 #pagebreak()
 
 === Opis Metryk

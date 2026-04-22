@@ -264,10 +264,6 @@ class ChurnNeuralNet(nn.Module):
 
 - Zaimplementowano ustandaryzowaną pętlę treningową z użyciem optymalizatora **Adam** oraz funkcji straty **BCEWithLogitsLoss** (idealna dla klasyfikacji binarnej w PyTorch).
 
-**Oczekiwany wynik**
-
-**Działające środowisko modelowania:** Stworzono modularną strukturę kodu, która pozwala na łatwą wymianę modeli i hiperparametrów. 
-
 ### Wyniki
 
 <p align="center"><figure class="figure"><p><img src="images/model_shape.png" alt="" /></p>
@@ -282,6 +278,9 @@ Modele są już zintegrowane z systemem metryk (Accuracy, F1-Score, Recall) w g�
 </figure></p>
 
 <p align="center"><figure class="figure"><p><img src="images/confusion_matrix_xgboost.png" alt="" /></p>
+</figure></p>
+
+<p align="center"><figure class="figure"><p><img src="images/xgboost_feature_importance.png" alt="" /></p>
 </figure></p>
 
 #### Opis Metryk
