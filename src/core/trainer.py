@@ -5,6 +5,11 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+<<<<<<< Updated upstream
+=======
+import torch.nn.functional as F
+from sklearn.metrics import accuracy_score, f1_score, recall_score
+>>>>>>> Stashed changes
 import xgboost as xgb
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -25,10 +30,12 @@ def get_plots_dir():
     return save_dir
 
 
-def train_pytorch(model, train_loader, val_loader, device, epochs, lr):
+def train_pytorch(model, train_loader, val_loader, device, epochs, lr,pos_weight_val=2.76):
+
     print("\n--- Starting Neural Network Training (PyTorch) ---")
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    pos_weight = torch.tensor([pos_weight_val]).to(device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight) # Ideal loss for binary classification, now with the data weights for this dataset
+    optimizer = optim.Adam(model.parameters(), lr=lr,weight_decay=1e-4) # decay might improve data regularisation
 
     for epoch in range(epochs):
         model.train()
@@ -47,8 +54,16 @@ def train_pytorch(model, train_loader, val_loader, device, epochs, lr):
     )
     return model
 
+<<<<<<< Updated upstream
 
 def evaluate_pytorch(model, test_loader, device):
+=======
+def evaluate_pytorch(model, test_loader, device,threshold = 0.5): #defaults to 0.5 can be changed
+
+    # modifying the threshould from fixed 0.5
+    # to somewhere between 0.35 and 0.4 should improve recall and f1_score
+
+>>>>>>> Stashed changes
     model.eval()
     y_true, y_pred = [], []
 
@@ -57,7 +72,11 @@ def evaluate_pytorch(model, test_loader, device):
             X_batch = X_batch.to(device)
             outputs = model(X_batch)
             probs = torch.sigmoid(outputs)
+<<<<<<< Updated upstream
             preds = (probs > 0.5).float()
+=======
+            preds = (probs > threshold).float() # Convert probability with custom threshold
+>>>>>>> Stashed changes
 
             y_true.extend(y_batch.cpu().numpy())
             y_pred.extend(preds.cpu().numpy())
@@ -122,8 +141,28 @@ def train_and_eval_xgboost(xgb_model, xgb_data):
     plt.close()
     print("XGBoost plots (CM & Feature Importance) saved.")
 
+<<<<<<< Updated upstream
     return {
         "Accuracy": accuracy_score(xgb_data["y_test"], preds),
         "F1-Score": f1_score(xgb_data["y_test"], preds),
         "Recall": recall_score(xgb_data["y_test"], preds),
     }
+=======
+    return metrics
+
+# Focal foss - we can use this instead of the BCEWithLogitsLoss for harder to guess cases
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, inputs, targets):
+        BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
+        pt = torch.exp(-BCE_loss)
+        F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+        return torch.mean(F_loss)
+
+# in train_pytorch:
+# criterion = FocalLoss(alpha=0.73, gamma=2.0) # alpha = weight of the class variable
+>>>>>>> Stashed changes

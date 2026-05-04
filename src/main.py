@@ -25,8 +25,8 @@ def main():
 
         # testing and Training
 
-        nn_model = train_pytorch(nn_model, train_loader, val_loader, DEVICE, EPOCHS, LEARNING_RATE)
-        nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE)
+        nn_model = train_pytorch(nn_model, train_loader, val_loader, DEVICE, EPOCHS, LEARNING_RATE,pos_weight_val=2.76)
+        nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE,threshold=0.45)
         xgb_results = train_and_eval_xgboost(xgb_model, xgb_data)
 
         print(f"After training (PyTorch):\n")
