@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 #let project(title: "", authors: (), date: none, body) = {
+=======
+#let project(title: "", subtitle:"", authors: (), date: none, body) = {
+>>>>>>> ea2b078 (complete milestone 3)
 
   set document(author: authors.map(a => a.name), title: title)
   set page(numbering: "1", number-align: center)
@@ -7,6 +11,12 @@
 
   align(center)[
     #block(text(weight: 700, 1.75em, title))
+<<<<<<< HEAD
+=======
+    #if(subtitle != ""){
+    block(text(weight: 400, 1.4em, subtitle))
+    }
+>>>>>>> ea2b078 (complete milestone 3)
     #v(1em, weak: true)
     #date
   ]

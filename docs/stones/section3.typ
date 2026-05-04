@@ -82,6 +82,10 @@ To jest prawdopodobnie najważniejsza metryka dla działu utrzymania klienta. Je
 
 *F1-Score*
 - *Co mówi:* To średnia (harmoniczna) z Recall i Precision. Szuka balansu.
+
+Sam wysoki Recall łatwo oszukać. Wystarczy, że model stwierdzi, że każdy dany mu klient odjedzie. Wtedy Recall będzie równy 100%, ale model jest bezużyteczny, bo nie poprawnie klasyfikuje lojalnych klientów, którzy nie chcą kończyć umowy z firmą. F1-Score karze model za bycie zbyt ostrożnym lub zbyt agresywnym. Jeśli F1-Score jest wysoki, oznacza to, że model ma zarówno dobrą wykrywalność (Recall), jak i nie myli się zbyt często (Precision). To najlepsza metryka do ogólnego porównania, czy lepszy tutaj jest XGBoost, czy Sieć Neuronowa.
+
+
 === Ogólne Porównanie
 Mimo że sieć neuronowa (PyTorch) ma wyższą ogólną dokładność, to w tym konkretnym zadaniu (przewidywanie odejścia klientów) zdecydowanym zwycięzcą jest XGBoost.
   - Accuracy (Dokładność):
