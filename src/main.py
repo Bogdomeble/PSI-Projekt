@@ -1,3 +1,4 @@
+# src/main.py
 from src.dataset import get_dataloaders
 from src.models.neural_net import ChurnNeuralNet
 from src.models.xgboost_model import get_xgboost_model
@@ -11,58 +12,42 @@ def main():
     print("=========================================\n")
 
     try:
-        # main function
-
         train_loader, val_loader, test_loader, xgb_data, input_dim = get_dataloaders()
 
-        # pytorch nn_model init and summary
-
         nn_model = ChurnNeuralNet(input_dim).to(DEVICE)
-
-        # xgboost model init
-
         xgb_model = get_xgboost_model()
 
-        # testing and Training
+        # PYTORCH TRAINING - with added weight 2.76 for the Churn class
+        nn_model = train_pytorch(
+            nn_model, train_loader, val_loader, DEVICE,
+            EPOCHS, LEARNING_RATE, pos_weight_val=2.76
+        )
 
-        nn_model = train_pytorch(nn_model, train_loader, val_loader, DEVICE, EPOCHS, LEARNING_RATE,pos_weight_val=2.76)
-        nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE,threshold=0.45)
+        # PYTORCH EVALUATION - with lowered threshold to 0.4 (better recall for imbalanced data)
+        nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE, threshold=0.4)
+
+        # XGBOOST TRAINING AND EVALUATION
         xgb_results = train_and_eval_xgboost(xgb_model, xgb_data)
 
-        print(f"After training (PyTorch):\n")
+        print(f"\nAfter training (PyTorch):\n")
         summary(nn_model, input_size=(BATCH_SIZE, input_dim))
-
-        """ comment: this can be uncommented for dataset loading testing"""
-
-        # print("\n--- Data processed succesfully ---")
-        # print(f" Number of input values: {input_dim}")
-        # print(f"Training dataset: {len(train_loader.dataset)} samples ({len(train_loader)} batches)")
-        # print(f"Validation dataset: {len(val_loader.dataset)} samples ({len(val_loader)} batches)")
-        # print(f"Testing dataset: {len(test_loader.dataset)} samples ({len(test_loader)} batches)")
-
-        # one batch for testing the data flow
-
-        # X_batch, y_batch = next(iter(train_loader))
-        # print(f"\n Shape of single X batch: {X_batch.shape} ->[batch_size, input_size]")
-        # print(f" Shape of single y batch: {y_batch.shape} -> [batch_size, 1]")
-
-        """end comment"""
 
         # ==========================================
         # Results summary
         # ==========================================
-        print("\n" + "="*40)
-        print("\nFinal results (test set)\n")
-        print("="*40)
+        print("\n" + "="*55)
+        print(" Final results (test set)")
+        print("="*55)
         print(f"{'Metric':<15} | {'PyTorch (NN)':<15} | {'XGBoost':<15}")
-        print("-" * 45)
+        print("-" * 55)
 
-        for metric in ["Accuracy", "F1-Score", "Recall"]:
+        # Added ROC-AUC to the list of metrics
+        for metric in["Accuracy", "F1-Score", "Recall", "ROC-AUC"]:
             nn_val = f"{nn_results[metric]:.4f}"
             xgb_val = f"{xgb_results[metric]:.4f}"
             print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15}")
 
-        print("="*40)
+        print("="*55)
 
     except FileNotFoundError:
         print("\n[Error] File not found! Make sure it is in data/raw/")
