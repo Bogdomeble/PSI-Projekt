@@ -1,4 +1,3 @@
-# src/core/trainer.py
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -10,7 +9,6 @@ from sklearn.metrics import accuracy_score, f1_score, recall_score, roc_auc_scor
 from src.utils.plotting import (
     plot_confusion_matrix,
     plot_roc_curve,
-    plot_xgboost_importance,
 )
 
 
@@ -20,8 +18,9 @@ def train_pytorch(
     print("\n--- Starting Neural Network Training (PyTorch) ---")
 
     # Added weight for the minority class (Churn)
-    pos_weight = torch.tensor([pos_weight_val]).to(device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    # pos_weight = torch.tensor([pos_weight_val]).to(device)
+    # criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    criterion = FocalLoss()
 
     # Added weight_decay (L2 regularization) to reduce overfitting
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
@@ -71,45 +70,6 @@ def evaluate_pytorch(model, test_loader, device, threshold=0.5):
         "F1-Score": f1_score(y_true, y_pred),
         "Recall": recall_score(y_true, y_pred),
         "ROC-AUC": roc_auc_score(y_true, y_probs),
-    }
-
-
-def train_and_eval_xgboost(xgb_model, xgb_data):
-    print("\n--- Starting XGBoost Training ---")
-
-    features = xgb_data["feature_names"]
-    X_train_df = pd.DataFrame(xgb_data["X_train"], columns=features)
-    X_val_df = pd.DataFrame(xgb_data["X_val"], columns=features)
-    X_test_df = pd.DataFrame(xgb_data["X_test"], columns=features)
-
-    xgb_model.fit(
-        X_train_df,
-        xgb_data["y_train"],
-        eval_set=[(X_val_df, xgb_data["y_val"])],
-        verbose=False,
-    )
-    print("XGBoost training finished!")
-
-    # Predictions and Probabilities
-    preds = xgb_model.predict(xgb_data["X_test"])
-    probs = xgb_model.predict_proba(xgb_data["X_test"])[
-        :, 1
-    ]  # Get probability for Churn class (1)
-
-    # Generate all plots for XGBoost
-    plot_confusion_matrix(xgb_data["y_test"], preds, model_name="xgboost")
-    plot_roc_curve(xgb_data["y_test"], probs, model_name="xgboost")
-    plot_xgboost_importance(xgb_model)
-
-    print(
-        "Plots for models (ROC, Confusion Matrix, Feature Importance) have been saved in the 'plots/' folder."
-    )
-
-    return {
-        "Accuracy": accuracy_score(xgb_data["y_test"], preds),
-        "F1-Score": f1_score(xgb_data["y_test"], preds),
-        "Recall": recall_score(xgb_data["y_test"], preds),
-        "ROC-AUC": roc_auc_score(xgb_data["y_test"], probs),
     }
 
 

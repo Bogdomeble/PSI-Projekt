@@ -17,6 +17,9 @@ BATCH_SIZE = 32
 LEARNING_RATE = 0.001
 EPOCHS = 50
 
+# --- XGBoost ---
+XGBOOST_DROP_PERCENT = 40
+
 # ---  (GPU/CPU) ---
 # checks if the device supports cuda
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

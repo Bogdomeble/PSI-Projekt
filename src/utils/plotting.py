@@ -1,4 +1,3 @@
-# src/utils/plotting.py
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -50,13 +49,13 @@ def plot_roc_curve(y_true, y_probs, model_name="model"):
     plt.savefig(save_path)
     plt.close()
 
-def plot_xgboost_importance(xgb_model):
+def plot_xgboost_importance(xgb_model, model_name="xgboost"):
     """Generates and saves the feature importance plot for the XGBoost model."""
     plt.figure(figsize=(10, 6))
     xgb.plot_importance(xgb_model, max_num_features=10, importance_type='weight',
                         title='XGBoost - Top 10 Most Important Features')
     plt.tight_layout()
 
-    save_path = os.path.join(get_plots_dir(), "xgboost_feature_importance.png")
+    save_path = os.path.join(get_plots_dir(), "{model_name}_feature_importance.png")
     plt.savefig(save_path)
     plt.close()
