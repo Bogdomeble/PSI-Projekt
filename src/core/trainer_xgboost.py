@@ -50,17 +50,6 @@ def train_and_eval_xgboost(xgb_model, xgb_data):
 def train_and_eval_xgboost_with_feature_selection(
     xgb_model, xgb_data, drop_percent=30, verbose=False
 ):
-    """
-    Trains XGBoost, then retrains using only top N% most important features.
-
-    Args:
-        xgb_model: Initial XGBoost model
-        xgb_data: Dictionary with X_train, X_val, X_test, y_train, y_val, y_test, feature_names
-        drop_percent: Drop bottom X% of features (default 30%)
-
-    Returns:
-        results: Dictionary with metrics, also returns filtered data
-    """
     print("\n--- Starting XGBoost Training with feature selection ---")
 
     # First training to determine feature importance

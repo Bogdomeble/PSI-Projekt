@@ -35,3 +35,5 @@
 #include "stones/section2.typ"
 #pagebreak()
 #include "stones/section3.typ"
+#pagebreak()
+#include "stones/section4.typ"

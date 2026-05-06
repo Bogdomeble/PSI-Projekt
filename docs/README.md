@@ -320,3 +320,199 @@ Sam wysoki Recall łatwo oszukać. Wystarczy, że model stwierdzi, że każdy da
 - F1-Score:
   - XGBoost (63,89%) przewyższa PyTorch (59%).
   - Interpretacja: F1-Score potwierdza, że choć XGBoost częściej się myli (niższe Accuracy), to jego ogólna wartość użytkowa w balansowaniu wykrywania zjawiska “Churnu” w tym zbiorze danych jest większa.
+
+## Kamień Milowy 4
+
+ 
+
+### Wprowadzone zmiany
+
+ 
+
+#### Zmiana samplingu danych
+
+w `get_dataloaders.py` zamiast shuffle=True zastosowano WeightedRandomSampler
+
+`    class_sample_count = np.array([len(np.where(y_train == t)[0]) for t in np.unique(y_train)])
+    weight = 1. / class_sample_count # if the ammount of variables in each class is different, we need to adjust the weight
+    samples_weight = np.array([weight[int(t)] for t in y_train])
+
+
+    samples_weight = torch.from_numpy(samples_weight).double()
+    sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
+
+    # Dataloaders for python
+
+    train_loader = DataLoader(ChurnDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=False,drop_last=True)
+    # instead of shuffle=True, we use the sampler to ensure balanced sampling, set to True if results are worse
+    """drop_last=True fixes the Expected more than 1 value per channel when training, got input size torch.Size([1, 64])"""
+    val_loader = DataLoader(ChurnDataset(X_val, y_val), batch_size=BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(ChurnDataset(X_test, y_test), batch_size=BATCH_SIZE, shuffle=False)`
+
+**Dlaczego:**
+
+- W danych o churnie mamy **silnie niezbalansowane** klasy - ok. 73% osób pozostaje, tylko ok. 27% osób odchodzi (Wykres - Rysunek 3).
+  - `shuffle=True` losuje próbki losowo, ale nie zmienia rozkładu klas - nadal w każdej epoce model widzi **dużo więcej przykładów klasy dominującej**.- WeightedRandomSampler nadaje wagi próbkom **odwrotnie proporcjonalnie** do liczebności ich klasy. Dzięki temu w każdej epoce model widzi tyle samo przykładów z klasy mniejszościowej, co z większościowej.
+
+- W efekcie model powinien nie ignorować klientów odchodzących, skutkując poprawieniem metryk
+
+#### Zmniejszenie progu funkcji aktywacji `ChurnNeuralNet`
+
+ Próg został zmniejszony z `0.5` do `0.4`.
+
+```python
+        nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE, threshold=0.4)
+```
+
+**Dlaczego:**
+
+- Domyślny 0.5 działa dobrze z założeniem, że klasy są tak samo prawdopodobne - co w naszym przypadku nie jest prawdą.
+  - Dla niezbalansowanych danych, model często przewiduje niskie prawdopodobieństwo dla klasy mniejszościowej (np. 0.3). Przy progu 0.5 - żadna taka próbka nie zostanie zaklasyfikowana jako “odejście”.- Obniżenie progu do 0.4 zwiększa czułość (recall), czyli wykrywalność klientów, którzy **faktycznie odeszli**. Kosztem może być nieznaczny wzrost fałszywie pozytywnych, jednakże w analizowanym przez nas przypadku jest to akceptowalne - **najważniejsze jest, aby nie przegapić klientów którzy faktycznie odejdą.**
+
+#### Zastąpienie `BCEWithLogitsLoss` przez `FocalLoss`
+
+W pliku `trainer_pytorch.py` jako kryterium do trenowana zmieniono `BCEWithLogitsLoss` na `FocalLoss`
+
+```py
+  criterion = FocalLoss()
+  # ...
+  
+  # ...
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, inputs, targets):
+        BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
+        pt = torch.exp(-BCE_loss)
+        F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
+        return torch.mean(F_loss)
+```
+
+**Dlaczego:**
+
+- Metoda Focal Loss została zaproponowana do detekcji obiektów w **silnie niezbalansowanych zbiorach**.
+  - Redukuje wagę łatwych przykładów (gdzie model jest bardzo pewny klasy większościowej) i skupia się na trudnych, źle sklasyfikowanych przykładach (często należących do klasy mniejszościowej).
+
+- Model uczy się lepiej rozpoznawać rzadkie, ale ważne przypadki churnu, nawet jeśli są one trudniejsze do odróżnienia.
+
+#### XGBoost - Opuszczenie najmniej ważnych cech
+
+XGBoost trenuje model, następnie odrzuca 30% najmniej ważnych cech, po czym następnie trenuje nowy model (pomijając odrzucone cechy).
+
+`def train_and_eval_xgboost_with_feature_selection(
+    xgb_model, xgb_data, drop_percent=30, verbose=False
+):
+    print("\n--- Starting XGBoost Training with feature selection ---")
+
+    # First training to determine feature importance
+
+    features = xgb_data["feature_names"]
+    X_train_df = pd.DataFrame(xgb_data["X_train"], columns=features)
+    X_val_df = pd.DataFrame(xgb_data["X_val"], columns=features)
+    X_test_df = pd.DataFrame(xgb_data["X_test"], columns=features)
+
+    # Initial training
+    xgb_model.fit(
+        X_train_df,
+        xgb_data["y_train"],
+        eval_set=[(X_val_df, xgb_data["y_val"])],
+        verbose=False,
+    )
+    print("XGBoost training finished!")
+
+    # Get feature importance
+    importances = xgb_model.feature_importances_
+    feature_importance_pairs = list(zip(features, importances))
+    feature_importance_pairs.sort(key=lambda x: x[1], reverse=True)
+
+    # Calculate how many features to keep
+    n_features = len(features)
+    n_keep = max(1, int(n_features * (100 - drop_percent) / 100))
+
+    # Get top features
+    top_features = [pair[0] for pair in feature_importance_pairs[:n_keep]]
+    dropped_features = [pair[0] for pair in feature_importance_pairs[n_keep:]]
+
+    if verbose:
+        print("\nFeature importance ranking:")
+        for i, (feature, imp) in enumerate(feature_importance_pairs[:10], 1):
+            print(f"      {i}. {feature}: {imp:.4f}")
+
+        print(f"\nKeeping top {100 - drop_percent}% ({n_keep}/{n_features} features)")
+
+        if dropped_features:
+            print(f"\nDropping {len(dropped_features)} low-importance features:")
+            for feature in dropped_features[:5]:
+                print(f"      - {feature}")
+            if len(dropped_features) > 5:
+                print(f"      ... and {len(dropped_features) - 5} more")
+
+    # Retrain with only top features
+    # Filter data to keep only top features
+    feature_indices = [features.index(f) for f in top_features]
+
+    X_train_filtered = xgb_data["X_train"][:, feature_indices]
+    X_val_filtered = xgb_data["X_val"][:, feature_indices]
+    X_test_filtered = xgb_data["X_test"][:, feature_indices]
+
+    # Create new model (fresh training)
+    from src.models.xgboost_model import get_xgboost_model
+
+    xgb_model_filtered = get_xgboost_model()
+
+    # Train on filtered data
+    X_train_filtered_df = pd.DataFrame(X_train_filtered, columns=top_features)
+    X_val_filtered_df = pd.DataFrame(X_val_filtered, columns=top_features)
+
+    xgb_model_filtered.fit(
+        X_train_filtered_df,
+        xgb_data["y_train"],
+        eval_set=[(X_val_filtered_df, xgb_data["y_val"])],
+        verbose=False,
+    )
+
+    print("XGBoost re-training finished!")
+
+    # Evaluate
+    preds = xgb_model_filtered.predict(X_test_filtered)
+    probs = xgb_model_filtered.predict_proba(X_test_filtered)[:, 1]
+
+    # Generate plots
+    plot_confusion_matrix(xgb_data["y_test"], preds, model_name="xgboost_filtered")
+    plot_roc_curve(xgb_data["y_test"], probs, model_name="xgboost_filtered")
+    plot_xgboost_importance(xgb_model_filtered, model_name="xgboost_filtered")
+
+    # Compare with original (optional)
+    original_preds = xgb_model.predict(X_test_df)
+    original_probs = xgb_model.predict_proba(X_test_df)[:, 1]
+
+    results = {
+        "Accuracy": accuracy_score(xgb_data["y_test"], preds),
+        "F1-Score": f1_score(xgb_data["y_test"], preds),
+        "Recall": recall_score(xgb_data["y_test"], preds),
+        "ROC-AUC": roc_auc_score(xgb_data["y_test"], probs),
+        "original_accuracy": accuracy_score(xgb_data["y_test"], original_preds),
+        "features_used": n_keep,
+        "features_dropped": len(dropped_features),
+        "top_features": top_features,
+    }
+    if verbose:
+        print("\nPerformance Comparison:")
+        print(f"   Original Accuracy: {results['original_accuracy']:.4f}")
+        print(f"   Filtered Accuracy: {results['Accuracy']:.4f}")
+        improvement = results["Accuracy"] - results["original_accuracy"]
+        print(f"   {'Improvement' if improvement > 0 else 'Slight decrease'}: {improvement:+.4f}")
+
+    return results`
+
+**Dlaczego:**
+
+- XGBoost ma wbudowaną regularyzację, ale zbędne cechy mogą:
+  - wprowadzać szum,- powodować lekkie przetrenowanie,- wydłużać czas treningu.
+
+- Usunięcie najmniej ważnych cech upraszcza model, zmniejsza wariancję i może poprawiać generalizację.
+
+- Po ponownym trenowaniu często okazuje się, że model na mniejszej liczbie cech działa równie dobrze lub lepiej.
