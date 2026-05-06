@@ -78,14 +78,45 @@ XGBoost trenuje model, następnie odrzuca 30% najmniej ważnych cech, po czym na
 
 *Dlaczego:*
 
- - XGBoost ma wbudowaną regularyzację, ale zbędne cechy mogą:
+ - Zbędne cechy mogą:
 
   - wprowadzać szum,
-
   - powodować lekkie przetrenowanie,
-
   - wydłużać czas treningu.
 
  - Usunięcie najmniej ważnych cech upraszcza model, zmniejsza wariancję i może poprawiać generalizację.
 
- - Po ponownym trenowaniu często okazuje się, że model na mniejszej liczbie cech działa równie dobrze lub lepiej.
+== Porównanie wyników
+
+
+#figure(
+  image("../images/stone3_results.png"),
+  caption: [Wyniki wytrenowanych modeli przed wprowadzeniem zmian]
+) <model-results-before>
+#figure(
+  image("../images/results_after.png"),
+  caption: [Wyniki wytrenowanych modeli po wprowadzeniu zmian]
+) <model-results-before>
+*Podsumowanie:*
+ - *Pytorch:*
+  - Lekko pogorszone Accuracy (0.79 -> 0.73)
+  - Lekko zwiększony F1-Score (0.59 -> 0.62)
+  - *Znacznie polepszony Recall (0.55 -> 0.82)*
+  - Model znacznie polepszył swoją czułość; jest mniej podatny na błędy typu false negative, które dla firmy byłyby najbardziej kosztowne, skutkowały stratą klienta.
+ - *XGBoost:*
+  - Lekko zwiększone Accuracy (0.754 -> 0.756)
+  - Lekko zwiększony F1-Score (0.639 -> 0.641)
+  - Recall - bez zmian (0.821)
+  - Odrzucenie 40% najmniej ważnych charakterystyk przed trenowaniem modelu skutkowało małym wzrostem w Accuracy, ale nie miało wpływu na Recall
+ - Dodano dodatkową metrykę - ROC-AUC. Wykresy - następna strona.
+
+ 
+#figure(
+  image("../images/pytorch_roc_curve.png", width:85%),
+  caption: [Wykres ROC - Pytorch]
+) <roc-xgboost>
+
+#figure(
+  image("../images/xgboost_filtered_roc_curve.png", width:85%),
+  caption: [Wykres ROC - XGBoost]
+) <roc-xgboost>

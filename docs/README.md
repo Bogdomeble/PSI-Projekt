@@ -428,27 +428,11 @@ XGBoost trenuje model, następnie odrzuca 30% najmniej ważnych cech, po czym na
     feature_importance_pairs = list(zip(features, importances))
     feature_importance_pairs.sort(key=lambda x: x[1], reverse=True)
 
-    # Calculate how many features to keep
     n_features = len(features)
     n_keep = max(1, int(n_features * (100 - drop_percent) / 100))
 
-    # Get top features
     top_features = [pair[0] for pair in feature_importance_pairs[:n_keep]]
     dropped_features = [pair[0] for pair in feature_importance_pairs[n_keep:]]
-
-    if verbose:
-        print("\nFeature importance ranking:")
-        for i, (feature, imp) in enumerate(feature_importance_pairs[:10], 1):
-            print(f"      {i}. {feature}: {imp:.4f}")
-
-        print(f"\nKeeping top {100 - drop_percent}% ({n_keep}/{n_features} features)")
-
-        if dropped_features:
-            print(f"\nDropping {len(dropped_features)} low-importance features:")
-            for feature in dropped_features[:5]:
-                print(f"      - {feature}")
-            if len(dropped_features) > 5:
-                print(f"      ... and {len(dropped_features) - 5} more")
 
     # Retrain with only top features
     # Filter data to keep only top features
@@ -480,39 +464,44 @@ XGBoost trenuje model, następnie odrzuca 30% najmniej ważnych cech, po czym na
     preds = xgb_model_filtered.predict(X_test_filtered)
     probs = xgb_model_filtered.predict_proba(X_test_filtered)[:, 1]
 
-    # Generate plots
-    plot_confusion_matrix(xgb_data["y_test"], preds, model_name="xgboost_filtered")
-    plot_roc_curve(xgb_data["y_test"], probs, model_name="xgboost_filtered")
-    plot_xgboost_importance(xgb_model_filtered, model_name="xgboost_filtered")
-
-    # Compare with original (optional)
-    original_preds = xgb_model.predict(X_test_df)
-    original_probs = xgb_model.predict_proba(X_test_df)[:, 1]
-
     results = {
-        "Accuracy": accuracy_score(xgb_data["y_test"], preds),
-        "F1-Score": f1_score(xgb_data["y_test"], preds),
-        "Recall": recall_score(xgb_data["y_test"], preds),
-        "ROC-AUC": roc_auc_score(xgb_data["y_test"], probs),
-        "original_accuracy": accuracy_score(xgb_data["y_test"], original_preds),
-        "features_used": n_keep,
-        "features_dropped": len(dropped_features),
-        "top_features": top_features,
+        # ...
     }
-    if verbose:
-        print("\nPerformance Comparison:")
-        print(f"   Original Accuracy: {results['original_accuracy']:.4f}")
-        print(f"   Filtered Accuracy: {results['Accuracy']:.4f}")
-        improvement = results["Accuracy"] - results["original_accuracy"]
-        print(f"   {'Improvement' if improvement > 0 else 'Slight decrease'}: {improvement:+.4f}")
-
     return results`
 
 **Dlaczego:**
 
-- XGBoost ma wbudowaną regularyzację, ale zbędne cechy mogą:
-  - wprowadzać szum,- powodować lekkie przetrenowanie,- wydłużać czas treningu.
+- Zbędne cechy mogą:
+  - wprowadzać szum,
+  - powodować lekkie przetrenowanie,
+  - wydłużać czas treningu.
 
 - Usunięcie najmniej ważnych cech upraszcza model, zmniejsza wariancję i może poprawiać generalizację.
 
-- Po ponownym trenowaniu często okazuje się, że model na mniejszej liczbie cech działa równie dobrze lub lepiej.
+### Porównanie wyników
+
+<p align="center"><figure class="figure"><p><img src="images/stone3_results.png" alt="" /></p>
+</figure></p>
+
+<p align="center"><figure class="figure"><p><img src="images/results_after.png" alt="" /></p>
+</figure></p>
+
+**Podsumowanie:**
+
+- **Pytorch:**
+  - Lekko pogorszone Accuracy (0.79 -\> 0.73)
+  - Lekko zwiększony F1-Score (0.59 -\> 0.62)
+  - **Znacznie polepszony Recall (0.55 -\> 0.82)**
+  - Model znacznie polepszył swoją czułość; jest mniej podatny na błędy typu false negative, które dla firmy byłyby najbardziej kosztowne, skutkowały stratą klienta.
+- **XGBoost:**
+  - Lekko zwiększone Accuracy (0.754 -\> 0.756)
+  - Lekko zwiększony F1-Score (0.639 -\> 0.641)
+  - Recall - bez zmian (0.821)
+  - Odrzucenie 40% najmniej ważnych charakterystyk przed trenowaniem modelu skutkowało małym wzrostem w Accuracy, ale nie miało wpływu na Recall
+- Dodano dodatkową metrykę - ROC-AUC. Wykresy - następna strona.
+
+<p align="center"><figure class="figure"><p><img src="images/pytorch_roc_curve.png" alt="" /></p>
+</figure></p>
+
+<p align="center"><figure class="figure"><p><img src="images/xgboost_filtered_roc_curve.png" alt="" /></p>
+</figure></p>

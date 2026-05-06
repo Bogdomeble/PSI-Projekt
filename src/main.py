@@ -27,10 +27,10 @@ def main():
         nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE, threshold=0.4)
 
         # XGBOOST TRAINING AND EVALUATION
-        xgb_results = train_and_eval_xgboost(xgb_model, xgb_data)
+        #xgb_results = train_and_eval_xgboost(xgb_model, xgb_data)
 
         # XGBOOST RE-TRAINING WITH FEATURE DROPPING
-        xgbf_results = train_and_eval_xgboost_with_feature_selection(
+        xgb_results = train_and_eval_xgboost_with_feature_selection(
             xgb_model, xgb_data,
             drop_percent=XGBOOST_DROP_PERCENT,
         )
@@ -44,15 +44,14 @@ def main():
         print("\n" + "="*55)
         print(" Final results (test set)")
         print("="*55)
-        print(f"{'Metric':<15} | {'PyTorch (NN)':<15} | {'XGBoost':<15} | {'XGBoost Filtered':<15}")
+        print(f"{'Metric':<15} | {'PyTorch (NN)':<15} | {'XGBoost':<15}")
         print("-" * 55)
 
         # Added ROC-AUC to the list of metrics
         for metric in["Accuracy", "F1-Score", "Recall", "ROC-AUC"]:
             nn_val = f"{nn_results[metric]:.4f}"
             xgb_val = f"{xgb_results[metric]:.4f}"
-            xgbf_val = f"{xgbf_results[metric]:.4f}"
-            print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15} | {xgbf_val:<15}")
+            print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15}")
 
         print("="*55)
 

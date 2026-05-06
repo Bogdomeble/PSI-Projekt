@@ -31,7 +31,7 @@
 
 #set text(lang: "pl")
 #include "stones/section1.typ"
-#pagebreak() // nowa strona
+#pagebreak()
 #include "stones/section2.typ"
 #pagebreak()
 #include "stones/section3.typ"
