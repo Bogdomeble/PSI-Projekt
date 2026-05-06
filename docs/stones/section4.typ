@@ -20,7 +20,7 @@ w `get_dataloaders.py` zamiast shuffle=True zastosowano WeightedRandomSampler
 
  - W efekcie model powinien nie ignorować klientów odchodzących, skutkując poprawieniem metryk
  
-=== Zmniejszenie progu funkcji aktywacji `ChurnNeuralNet`
+=== Zmniejszenie progu aktywacji `ChurnNeuralNet`
 Próg został zmniejszony z `0.5` do `0.4`.
 
 ```python
@@ -68,7 +68,7 @@ class FocalLoss(nn.Module):
 
 === XGBoost - Opuszczenie najmniej ważnych cech
 
-XGBoost trenuje model, następnie odrzuca 30% najmniej ważnych cech, po czym następnie trenuje nowy model (pomijając odrzucone cechy).
+XGBoost trenuje model, następnie odrzuca 40% najmniej ważnych cech, po czym następnie trenuje nowy model (pomijając odrzucone cechy).
 
 #{
   set text(size: 10pt) 
@@ -108,7 +108,9 @@ XGBoost trenuje model, następnie odrzuca 30% najmniej ważnych cech, po czym na
   - Lekko zwiększony F1-Score (0.639 -> 0.641)
   - Recall - bez zmian (0.821)
   - Odrzucenie 40% najmniej ważnych charakterystyk przed trenowaniem modelu skutkowało małym wzrostem w Accuracy, ale nie miało wpływu na Recall
- - Dodano dodatkową metrykę - ROC-AUC. Wykresy - następna strona.
+ - Dodano dodatkową metrykę - ROC-AUC. Wykresy ROC - następna strona.
+  - ROC-AUC ocenia jakość rankingową modelu klasyfikacyjnego - mówi, jak dobrze model odróżnić potrafi klasę pozytywną (w naszym przypadku - churn) od negatywnej (brak churnu). 
+  - Uzyskane przez nas wartości 0.84 (PyTorch) oraz 0.85 (XGBoost) wskazują, że model jest w stanie z dużym prawdopodobieństwem sklasyfikować osobę odchodzącą poprawnie.
 
  
 #figure(
