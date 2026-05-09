@@ -5,7 +5,8 @@ from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from src.config import *
-
+import joblib 
+import json 
 
 def load_and_clean_data(filepath):
     print(f"Reading data from: {filepath}")
@@ -37,8 +38,6 @@ def prepare_data_splits(df):
     X = df.drop(columns=[TARGET_COLUMN]).values
     y = df[TARGET_COLUMN].values
 
-    # Divide the data into train,test,validate subsets
-
     X_temp, X_test, y_temp, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
@@ -48,14 +47,13 @@ def prepare_data_splits(df):
         X_temp, y_temp, test_size=val_ratio, random_state=RANDOM_STATE, stratify=y_temp
     )
 
-    # scale data for NNs
-
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_val = scaler.transform(X_val)
     X_test = scaler.transform(X_test)
 
-    return (X_train, y_train), (X_val, y_val), (X_test, y_test)
+    # also return the scaler at the end
+    return (X_train, y_train), (X_val, y_val), (X_test, y_test), scaler
 
 class ChurnDataset(Dataset):
     def __init__(self, X, y):
@@ -73,43 +71,41 @@ class ChurnDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 def get_dataloaders():
-
     df = load_and_clean_data(RAW_DATA_PATH)
-
     feature_names = df.drop(columns=[TARGET_COLUMN]).columns.tolist()
 
-    #save modified data to temporaty file
-
+    # check if directory exists
+    os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
     df.to_csv(PROCESSED_DATA_PATH, index=False)
 
-    (X_train, y_train), (X_val, y_val), (X_test, y_test) = prepare_data_splits(df)
+    # get scaler from function
+    (X_train, y_train), (X_val, y_val), (X_test, y_test), scaler = prepare_data_splits(df)
 
+    # save the columns and the scaler
+    export_dir = os.path.join(BASE_DIR, "exported-models")
+    os.makedirs(export_dir, exist_ok=True)
+    
+    joblib.dump(scaler, os.path.join(export_dir, "scaler.pkl"))
+    with open(os.path.join(export_dir, "columns.json"), "w") as f:
+        json.dump(feature_names, f)
+
+    # scaler weights - these stay the same
     class_sample_count = np.array([len(np.where(y_train == t)[0]) for t in np.unique(y_train)])
-    weight = 1. / class_sample_count # if the ammount of variables in each class is different, we need to adjust the weight
+    weight = 1. / class_sample_count
     samples_weight = np.array([weight[int(t)] for t in y_train])
-
-
     samples_weight = torch.from_numpy(samples_weight).double()
     sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
 
-    # Dataloaders for python
-
-    train_loader = DataLoader(ChurnDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=False,drop_last=True)
-    # instead of shuffle=True, we use the sampler to ensure balanced sampling, set to True if results are worse
-    """drop_last=True fixes the Expected more than 1 value per channel when training, got input size torch.Size([1, 64])"""
+    train_loader = DataLoader(ChurnDataset(X_train, y_train), batch_size=BATCH_SIZE, sampler=sampler, drop_last=True)
     val_loader = DataLoader(ChurnDataset(X_val, y_val), batch_size=BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(ChurnDataset(X_test, y_test), batch_size=BATCH_SIZE, shuffle=False)
-
-    # XGboost dictionary for the selected training sets
 
     xgb_data = {
         "X_train": X_train, "y_train": y_train,
         "X_val": X_val, "y_val": y_val,
         "X_test": X_test, "y_test": y_test,
-        "feature_names": feature_names  # <--- this is for the xgboost plot file
+        "feature_names": feature_names
     }
-
-    # we return input_dims here
 
     input_dim = X_train.shape[1]
 

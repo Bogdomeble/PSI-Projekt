@@ -1,3 +1,4 @@
+# docs/snippets/load_and_clean_data.py
 def load_and_clean_data(filepath):
     print(f"Reading data from: {filepath}")
     df = pd.read_csv(filepath)

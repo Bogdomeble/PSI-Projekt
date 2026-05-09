@@ -1,3 +1,4 @@
+# docs/snippets/xgboost_feature_selection.py
 def train_and_eval_xgboost_with_feature_selection(
     xgb_model, xgb_data, drop_percent=30, verbose=False
 ):

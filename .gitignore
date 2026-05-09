@@ -66,3 +66,9 @@ Thumbs.db
 # Jupyter Notebook
 
 .ipynb_checkpoints/
+
+
+# pliki wyeksportowanych modeli 
+
+exported-models/*
+!exported-models/.gitkeep

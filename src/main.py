@@ -5,6 +5,7 @@ from src.core.trainer_pytorch import train_pytorch, evaluate_pytorch
 from src.core.trainer_xgboost import train_and_eval_xgboost, train_and_eval_xgboost_with_feature_selection
 from src.config import DEVICE, BATCH_SIZE, EPOCHS, LEARNING_RATE, XGBOOST_DROP_PERCENT
 from torchinfo import summary
+import torch, os
 
 def main():
     print("=========================================")
@@ -54,6 +55,15 @@ def main():
             print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15}")
 
         print("="*55)
+
+        # save both models for milestone 5: .pt for the neural network and .json for the XGBoost model
+
+        export_dir = "exported-models"
+        os.makedirs(export_dir, exist_ok=True) # create folder if empty
+
+        torch.save(nn_model.state_dict(), os.path.join(export_dir, "nn_model.pt"))
+        xgb_model.save_model(os.path.join(export_dir, "xgb_model.json"))
+        print(f"\n[Success] Models exported to directory: '{export_dir}/'")
 
     except FileNotFoundError:
         print("\n[Error] File not found! Make sure it is in data/raw/")

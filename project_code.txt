@@ -1,0 +1,838 @@
+PROJECT CODE DUMP
+FILES: 12
+================================================================================
+
+INDEX:
+pyproject.toml
+scripts/analyse.py
+scripts/torchviz.py
+scripts/visualise.py
+src/config.py
+src/core/trainer_pytorch.py
+src/core/trainer_xgboost.py
+src/dataset.py
+src/main.py
+src/models/neural_net.py
+src/models/xgboost_model.py
+src/utils/plotting.py
+
+================================================================================
+
+FILE: pyproject.toml
+================================================================================
+# pyproject.toml
+
+
+FILE: scripts/analyse.py
+================================================================================
+# scripts/analyse.py
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+from src.config import RAW_DATA_PATH
+from src.dataset import load_and_clean_data
+
+
+def main():
+    # Load data
+    df = load_and_clean_data(RAW_DATA_PATH)
+
+    # set up save dir for later
+    save_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "plots"
+    )
+    os.makedirs(save_dir, exist_ok=True)
+
+    # initial cleanup
+    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    df.dropna(inplace=True)
+
+    # basic info
+    print("--- BASIC INFORMATION ---")
+    print(f"Number of records: {df.shape[0]}")
+    print(f"Number of columns: {df.shape[1]}")
+    print("\nTypes and missing data:\n", df.info())
+
+    print("\n")
+    print(df.describe())
+
+    # target variable analysis
+    print("\n--- CHURN STATISTICS ---")
+
+    churn_counts = df["Churn"].value_counts(normalize=True) * 100
+
+    churn_yes = churn_counts.get(1.0, 0)
+    churn_no = churn_counts.get(0.0, 0)
+
+    print(f"% of clients that left (1): {churn_yes:.2f}%")
+    print(f"% of clients that stayed (0): {churn_no:.2f}%")
+
+    # visualization
+    sns.set_style("whitegrid")
+    plt.figure()#figsize=(18, 12))
+
+    # plt.subplot(2, 2, 1)
+    # df["Churn"].value_counts().plot.pie(
+    #     autopct="%1.1f%%", colors=["#66b3ff", "#ff9999"], startangle=90
+    # )
+    # plt.title("Churn pie plot")
+
+    # plt.subplot(2, 2, 2)
+    sns.histplot(
+        data=df, x="MonthlyCharges", hue="Churn", multiple="stack", palette="magma"
+    )
+    plt.title("Monthly Charges vs Churn")
+
+    # plt.subplot(2, 2, 3)
+    # sns.boxplot(x="Churn", y="tenure", data=df, palette="Set2")
+    # plt.title("Tenure vs Churn")
+
+    # plt.subplot(2, 2, 4)
+    # numeric_df = df.select_dtypes(include=[np.number])
+    # sns.heatmap(numeric_df.corr(), annot=False, cmap="coolwarm")
+    # plt.title("Correlation heatmap")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, "5_charges_vs_churn.png"))
+    plt.close()
+
+
+if __name__ == "__main__":
+    main()
+
+
+FILE: scripts/torchviz.py
+================================================================================
+# scripts/torchviz.py
+import os
+from src.config import DEVICE
+from src.dataset import get_dataloaders
+from src.models.neural_net import ChurnNeuralNet
+from torch import randn
+from torchviz import make_dot
+def main():
+    #set up save directory
+    save_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "plots"
+    )
+    os.makedirs(save_dir, exist_ok=True)
+    _, _, _, _, input_dim = get_dataloaders()
+
+    nn_model = ChurnNeuralNet(input_dim).to(DEVICE)
+
+    # Evaluate the model 
+    nn_model.eval()
+    # I think this needs to happen in order 
+    # for us to be able to
+    # render the thingamajig
+
+    dummy_input = randn(1, input_dim).to(DEVICE)
+    dot = make_dot(nn_model(dummy_input), params=dict(nn_model.named_parameters()))
+    dot.render("neural_network_visualization", format="png", directory=save_dir)
+
+if __name__ == "__main__":
+    main()
+
+FILE: scripts/visualise.py
+================================================================================
+# scripts/visualise.py
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+from src.config import RAW_DATA_PATH
+
+# style
+sns.set_theme(style="whitegrid")
+
+def load_data_for_eda():
+    """Loads data and fixes only the TotalCharges column for visualization."""
+    df = pd.read_csv(RAW_DATA_PATH)
+    df['TotalCharges'] = pd.to_numeric(df['TotalCharges'].replace(" ", np.nan))
+    df['TotalCharges'] = df['TotalCharges'].fillna(0)
+    return df
+
+def plot_class_balance(df, save_dir):
+    """Plot 1: Class balance - how many customers left and how many stayed."""
+    plt.figure(figsize=(6, 4))
+    ax = sns.countplot(data=df, x='Churn', palette=['#2ecc71', '#e74c3c'])
+    plt.title('Distribution of the target variable (Churn)')
+    plt.xlabel('Did the customer leave? (Churn)')
+    plt.ylabel('Number of customers')
+
+    # Add values above the bars
+    for p in ax.patches:
+        ax.annotate(f'{p.get_height()}', (p.get_x() + p.get_width() / 2., p.get_height()),
+                    ha='center', va='baseline', fontsize=11, color='black', xytext=(0, 5),
+                    textcoords='offset points')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, '1_class_balance.png'))
+    plt.close()
+
+def plot_charges_vs_churn(df, save_dir):
+    """Plot 2: Monthly charges vs customer churn (Boxplot)."""
+    plt.figure(figsize=(8, 5))
+    sns.boxplot(data=df, x='Churn', y='MonthlyCharges', palette=['#2ecc71', '#e74c3c'])
+    plt.title('Monthly charges vs churn decision')
+    plt.xlabel('Did the customer leave?')
+    plt.ylabel('Monthly charges ($)')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, '2_monthly_charges_boxplot.png'))
+    plt.close()
+
+def plot_contract_vs_churn(df, save_dir):
+    """Plot 3: Contract type vs customer churn."""
+    plt.figure(figsize=(8, 5))
+    sns.countplot(data=df, x='Contract', hue='Churn', palette=['#2ecc71', '#e74c3c'])
+    plt.title('Contract type vs churn risk')
+    plt.xlabel('Contract type')
+    plt.ylabel('Number of customers')
+    plt.legend(title='Churn')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, '3_contract_vs_churn.png'))
+    plt.close()
+
+def plot_correlation_heatmap(df, save_dir):
+    """Plot 4: Correlation matrix for numerical variables."""
+    # Select only numeric columns + convert Churn to numbers just for this plot
+    df_numeric = df[['tenure', 'MonthlyCharges', 'TotalCharges']].copy()
+    df_numeric['Churn_Num'] = df['Churn'].map({'Yes': 1, 'No': 0})
+
+    corr_matrix = df_numeric.corr()
+
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", vmin=-1, vmax=1)
+    plt.title('Correlation matrix of numerical features')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, '4_correlation_heatmap.png'))
+    plt.close()
+
+def main():
+    print("Starting to generate plots...")
+    df = load_data_for_eda()
+
+    # Create a folder for plots in the main project directory
+    save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "plots")
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Generate plots
+    plot_class_balance(df, save_dir)
+    plot_charges_vs_churn(df, save_dir)
+    plot_contract_vs_churn(df, save_dir)
+    plot_correlation_heatmap(df, save_dir)
+
+    print(f"Success! The plots have been generated and saved in the folder: {save_dir}/")
+
+if __name__ == "__main__":
+    main()
+
+
+FILE: src/config.py
+================================================================================
+# src/config.py
+import os
+import torch
+
+# --- Path dirs ---
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RAW_DATA_PATH = os.path.join(BASE_DIR, "data", "raw", "Telco-Customer-Churn.csv")
+PROCESSED_DATA_PATH = os.path.join(BASE_DIR, "data", "processed", "cleaned_data.csv")
+
+# --- Parameters ---
+TARGET_COLUMN = "Churn"
+TEST_SIZE = 0.15
+VAL_SIZE = 0.15
+RANDOM_STATE = 42
+
+# --- Pytorch (SSN) ---
+BATCH_SIZE = 32
+LEARNING_RATE = 0.001
+EPOCHS = 50
+
+# --- XGBoost ---
+XGBOOST_DROP_PERCENT = 40
+
+# ---  (GPU/CPU) ---
+# checks if the device supports cuda
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+FILE: src/core/trainer_pytorch.py
+================================================================================
+# src/core/trainer_pytorch.py
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from sklearn.metrics import accuracy_score, f1_score, recall_score, roc_auc_score
+
+# We import our plotting tools
+from src.utils.plotting import (
+    plot_confusion_matrix,
+    plot_roc_curve,
+)
+
+
+def train_pytorch(
+    model, train_loader, val_loader, device, epochs, lr, pos_weight_val=1.0
+):
+    print("\n--- Starting Neural Network Training (PyTorch) ---")
+
+    # Added weight for the minority class (Churn)
+    # pos_weight = torch.tensor([pos_weight_val]).to(device)
+    # criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    criterion = FocalLoss()
+
+    # Added weight_decay (L2 regularization) to reduce overfitting
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+
+    for epoch in range(epochs):
+        model.train()
+        train_loss = 0.0
+
+        for X_batch, y_batch in train_loader:
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+
+            optimizer.zero_grad()
+            outputs = model(X_batch)
+            loss = criterion(outputs, y_batch)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
+    print(
+        f"PyTorch training finished! Final loss: {train_loss / len(train_loader):.4f}"
+    )
+    return model
+
+
+def evaluate_pytorch(model, test_loader, device, threshold=0.5):
+    model.eval()
+    y_true, y_pred, y_probs = [], [], []
+
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader:
+            X_batch = X_batch.to(device)
+            outputs = model(X_batch)
+
+            probs = torch.sigmoid(outputs)
+            preds = (probs > threshold).float()  # Dynamic classification threshold
+
+            y_true.extend(y_batch.numpy())
+            y_pred.extend(preds.cpu().numpy())
+            y_probs.extend(probs.cpu().numpy())
+
+    # Generate plots using our new module
+    plot_confusion_matrix(y_true, y_pred, model_name="pytorch")
+    plot_roc_curve(y_true, y_probs, model_name="pytorch")
+
+    return {
+        "Accuracy": accuracy_score(y_true, y_pred),
+        "F1-Score": f1_score(y_true, y_pred),
+        "Recall": recall_score(y_true, y_pred),
+        "ROC-AUC": roc_auc_score(y_true, y_probs),
+    }
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, inputs, targets):
+        BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
+        pt = torch.exp(-BCE_loss)
+        F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
+        return torch.mean(F_loss)
+
+
+# Użycie w train_pytorch:
+# criterion = FocalLoss(alpha=0.73, gamma=2.0) # alpha = waga klasy (np. odsetek klasy dominującej)
+
+
+FILE: src/core/trainer_xgboost.py
+================================================================================
+# src/core/trainer_xgboost.py
+import pandas as pd
+from sklearn.metrics import accuracy_score, f1_score, recall_score, roc_auc_score
+
+# We import our plotting tools
+from src.utils.plotting import (
+    plot_confusion_matrix,
+    plot_roc_curve,
+    plot_xgboost_importance,
+)
+
+
+def train_and_eval_xgboost(xgb_model, xgb_data):
+    print("\n--- Starting XGBoost Training ---")
+    features = xgb_data["feature_names"]
+    X_train_df = pd.DataFrame(xgb_data["X_train"], columns=features)
+    X_val_df = pd.DataFrame(xgb_data["X_val"], columns=features)
+    X_test_df = pd.DataFrame(xgb_data["X_test"], columns=features)
+
+    xgb_model.fit(
+        X_train_df,
+        xgb_data["y_train"],
+        eval_set=[(X_val_df, xgb_data["y_val"])],
+        verbose=False,
+    )
+    print("XGBoost training finished!")
+
+    # Predictions and Probabilities
+    preds = xgb_model.predict(xgb_data["X_test"])
+    probs = xgb_model.predict_proba(xgb_data["X_test"])[
+        :, 1
+    ]  # Get probability for Churn class (1)
+
+    # Generate all plots for XGBoost
+    plot_confusion_matrix(xgb_data["y_test"], preds, model_name="xgboost")
+    plot_roc_curve(xgb_data["y_test"], probs, model_name="xgboost")
+    plot_xgboost_importance(xgb_model)
+
+    print(
+        "Plots for models (ROC, Confusion Matrix, Feature Importance) have been saved in the 'plots/' folder."
+    )
+
+    return {
+        "Accuracy": accuracy_score(xgb_data["y_test"], preds),
+        "F1-Score": f1_score(xgb_data["y_test"], preds),
+        "Recall": recall_score(xgb_data["y_test"], preds),
+        "ROC-AUC": roc_auc_score(xgb_data["y_test"], probs),
+    }
+
+
+def train_and_eval_xgboost_with_feature_selection(
+    xgb_model, xgb_data, drop_percent=30, verbose=False
+):
+    print("\n--- Starting XGBoost Training with feature selection ---")
+
+    # First training to determine feature importance
+
+    features = xgb_data["feature_names"]
+    X_train_df = pd.DataFrame(xgb_data["X_train"], columns=features)
+    X_val_df = pd.DataFrame(xgb_data["X_val"], columns=features)
+    X_test_df = pd.DataFrame(xgb_data["X_test"], columns=features)
+
+    # Initial training
+    xgb_model.fit(
+        X_train_df,
+        xgb_data["y_train"],
+        eval_set=[(X_val_df, xgb_data["y_val"])],
+        verbose=False,
+    )
+    print("XGBoost training finished!")
+
+    # Get feature importance
+    importances = xgb_model.feature_importances_
+    feature_importance_pairs = list(zip(features, importances))
+    feature_importance_pairs.sort(key=lambda x: x[1], reverse=True)
+
+    # Calculate how many features to keep
+    n_features = len(features)
+    n_keep = max(1, int(n_features * (100 - drop_percent) / 100))
+
+    # Get top features
+    top_features = [pair[0] for pair in feature_importance_pairs[:n_keep]]
+    dropped_features = [pair[0] for pair in feature_importance_pairs[n_keep:]]
+
+    if verbose:
+        print("\nFeature importance ranking:")
+        for i, (feature, imp) in enumerate(feature_importance_pairs[:10], 1):
+            print(f"      {i}. {feature}: {imp:.4f}")
+
+        print(f"\nKeeping top {100 - drop_percent}% ({n_keep}/{n_features} features)")
+
+        if dropped_features:
+            print(f"\nDropping {len(dropped_features)} low-importance features:")
+            for feature in dropped_features[:5]:
+                print(f"      - {feature}")
+            if len(dropped_features) > 5:
+                print(f"      ... and {len(dropped_features) - 5} more")
+
+    # Retrain with only top features
+    # Filter data to keep only top features
+    feature_indices = [features.index(f) for f in top_features]
+
+    X_train_filtered = xgb_data["X_train"][:, feature_indices]
+    X_val_filtered = xgb_data["X_val"][:, feature_indices]
+    X_test_filtered = xgb_data["X_test"][:, feature_indices]
+
+    # Create new model (fresh training)
+    from src.models.xgboost_model import get_xgboost_model
+
+    xgb_model_filtered = get_xgboost_model()
+
+    # Train on filtered data
+    X_train_filtered_df = pd.DataFrame(X_train_filtered, columns=top_features)
+    X_val_filtered_df = pd.DataFrame(X_val_filtered, columns=top_features)
+
+    xgb_model_filtered.fit(
+        X_train_filtered_df,
+        xgb_data["y_train"],
+        eval_set=[(X_val_filtered_df, xgb_data["y_val"])],
+        verbose=False,
+    )
+
+    print("XGBoost re-training finished!")
+
+    # Evaluate
+    preds = xgb_model_filtered.predict(X_test_filtered)
+    probs = xgb_model_filtered.predict_proba(X_test_filtered)[:, 1]
+
+    # Generate plots
+    plot_confusion_matrix(xgb_data["y_test"], preds, model_name="xgboost_filtered")
+    plot_roc_curve(xgb_data["y_test"], probs, model_name="xgboost_filtered")
+    plot_xgboost_importance(xgb_model_filtered, model_name="xgboost_filtered")
+
+    # Compare with original (optional)
+    original_preds = xgb_model.predict(X_test_df)
+    original_probs = xgb_model.predict_proba(X_test_df)[:, 1]
+
+    results = {
+        "Accuracy": accuracy_score(xgb_data["y_test"], preds),
+        "F1-Score": f1_score(xgb_data["y_test"], preds),
+        "Recall": recall_score(xgb_data["y_test"], preds),
+        "ROC-AUC": roc_auc_score(xgb_data["y_test"], probs),
+        "original_accuracy": accuracy_score(xgb_data["y_test"], original_preds),
+        "features_used": n_keep,
+        "features_dropped": len(dropped_features),
+        "top_features": top_features,
+    }
+    if verbose:
+        print("\nPerformance Comparison:")
+        print(f"   Original Accuracy: {results['original_accuracy']:.4f}")
+        print(f"   Filtered Accuracy: {results['Accuracy']:.4f}")
+        improvement = results["Accuracy"] - results["original_accuracy"]
+        print(f"   {'Improvement' if improvement > 0 else 'Slight decrease'}: {improvement:+.4f}")
+
+    return results
+
+
+FILE: src/dataset.py
+================================================================================
+# src/dataset.py
+import pandas as pd
+import numpy as np
+import torch
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from src.config import *
+
+
+def load_and_clean_data(filepath):
+    print(f"Reading data from: {filepath}")
+    df = pd.read_csv(filepath)
+
+    if 'customerID' in df.columns:
+        df = df.drop(columns=['customerID'])
+
+    # empty cells -> NaN -> 0
+
+    df['TotalCharges'] = pd.to_numeric(df['TotalCharges'].replace(" ", np.nan))
+    df['TotalCharges'] = df['TotalCharges'].fillna(0)
+
+    # map main variable to {0,1}
+
+    df['Churn'] = df['Churn'].map({'Yes': 1, 'No': 0})
+
+    # one-hot encoding
+
+    df = pd.get_dummies(df, drop_first=True)
+
+    # cast everything needed to float
+
+    df = df.astype(float)
+
+    return df
+
+def prepare_data_splits(df):
+    X = df.drop(columns=[TARGET_COLUMN]).values
+    y = df[TARGET_COLUMN].values
+
+    # Divide the data into train,test,validate subsets
+
+    X_temp, X_test, y_temp, y_test = train_test_split(
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
+    )
+
+    val_ratio = VAL_SIZE / (1.0 - TEST_SIZE)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_temp, y_temp, test_size=val_ratio, random_state=RANDOM_STATE, stratify=y_temp
+    )
+
+    # scale data for NNs
+
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_val = scaler.transform(X_val)
+    X_test = scaler.transform(X_test)
+
+    return (X_train, y_train), (X_val, y_val), (X_test, y_test)
+
+class ChurnDataset(Dataset):
+    def __init__(self, X, y):
+
+        self.X = torch.tensor(X, dtype=torch.float32)
+
+        # For binary classification pytorch need someithing like (n,1) instead of just (n)
+
+        self.y = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, idx):
+        return self.X[idx], self.y[idx]
+
+def get_dataloaders():
+
+    df = load_and_clean_data(RAW_DATA_PATH)
+
+    feature_names = df.drop(columns=[TARGET_COLUMN]).columns.tolist()
+
+    #save modified data to temporaty file
+
+    df.to_csv(PROCESSED_DATA_PATH, index=False)
+
+    (X_train, y_train), (X_val, y_val), (X_test, y_test) = prepare_data_splits(df)
+
+    class_sample_count = np.array([len(np.where(y_train == t)[0]) for t in np.unique(y_train)])
+    weight = 1. / class_sample_count # if the ammount of variables in each class is different, we need to adjust the weight
+    samples_weight = np.array([weight[int(t)] for t in y_train])
+
+
+    samples_weight = torch.from_numpy(samples_weight).double()
+    sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
+
+    # Dataloaders for python
+
+    train_loader = DataLoader(ChurnDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=False,drop_last=True)
+    # instead of shuffle=True, we use the sampler to ensure balanced sampling, set to True if results are worse
+    """drop_last=True fixes the Expected more than 1 value per channel when training, got input size torch.Size([1, 64])"""
+    val_loader = DataLoader(ChurnDataset(X_val, y_val), batch_size=BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(ChurnDataset(X_test, y_test), batch_size=BATCH_SIZE, shuffle=False)
+
+    # XGboost dictionary for the selected training sets
+
+    xgb_data = {
+        "X_train": X_train, "y_train": y_train,
+        "X_val": X_val, "y_val": y_val,
+        "X_test": X_test, "y_test": y_test,
+        "feature_names": feature_names  # <--- this is for the xgboost plot file
+    }
+
+    # we return input_dims here
+
+    input_dim = X_train.shape[1]
+
+    return train_loader, val_loader, test_loader, xgb_data, input_dim
+
+
+FILE: src/main.py
+================================================================================
+# src/main.py
+from src.dataset import get_dataloaders
+from src.models.neural_net import ChurnNeuralNet
+from src.models.xgboost_model import get_xgboost_model
+from src.core.trainer_pytorch import train_pytorch, evaluate_pytorch
+from src.core.trainer_xgboost import train_and_eval_xgboost, train_and_eval_xgboost_with_feature_selection
+from src.config import DEVICE, BATCH_SIZE, EPOCHS, LEARNING_RATE, XGBOOST_DROP_PERCENT
+from torchinfo import summary
+
+def main():
+    print("=========================================")
+    print(f"Using compute device: {DEVICE.upper()}")
+    print("=========================================\n")
+
+    try:
+        train_loader, val_loader, test_loader, xgb_data, input_dim = get_dataloaders()
+
+        nn_model = ChurnNeuralNet(input_dim).to(DEVICE)
+        xgb_model = get_xgboost_model()
+
+        # PYTORCH TRAINING - with added weight 2.76 for the Churn class
+        nn_model = train_pytorch(
+            nn_model, train_loader, val_loader, DEVICE,
+            EPOCHS, LEARNING_RATE, pos_weight_val=2.76
+        )
+
+        # PYTORCH EVALUATION - with lowered threshold to 0.4 (better recall for imbalanced data)
+        nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE, threshold=0.4)
+
+        # XGBOOST TRAINING AND EVALUATION
+        #xgb_results = train_and_eval_xgboost(xgb_model, xgb_data)
+
+        # XGBOOST RE-TRAINING WITH FEATURE DROPPING
+        xgb_results = train_and_eval_xgboost_with_feature_selection(
+            xgb_model, xgb_data,
+            drop_percent=XGBOOST_DROP_PERCENT,
+        )
+
+        print(f"\nAfter training (PyTorch):\n")
+        summary(nn_model, input_size=(BATCH_SIZE, input_dim))
+
+        # ==========================================
+        # Results summary
+        # ==========================================
+        print("\n" + "="*55)
+        print(" Final results (test set)")
+        print("="*55)
+        print(f"{'Metric':<15} | {'PyTorch (NN)':<15} | {'XGBoost':<15}")
+        print("-" * 55)
+
+        # Added ROC-AUC to the list of metrics
+        for metric in["Accuracy", "F1-Score", "Recall", "ROC-AUC"]:
+            nn_val = f"{nn_results[metric]:.4f}"
+            xgb_val = f"{xgb_results[metric]:.4f}"
+            print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15}")
+
+        print("="*55)
+
+    except FileNotFoundError:
+        print("\n[Error] File not found! Make sure it is in data/raw/")
+    except Exception as e:
+        print(f"\n[Critical Error] main() threw exception:\n{e}")
+
+if __name__ == "__main__":
+    main()
+
+
+FILE: src/models/neural_net.py
+================================================================================
+# src/models/neural_net.py
+import torch
+import torch.nn as nn
+
+class ChurnNeuralNet(nn.Module):
+    def __init__(self, input_dim):
+        super(ChurnNeuralNet, self).__init__()
+
+        # Define the network architecture
+        self.network = nn.Sequential(
+            # Input layer
+            nn.Linear(input_dim, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.3), # Randomly disables 30% of neurons to prevent memorization
+
+            # Hidden layer
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+
+            # Output layer
+            # 1 neuron, because we are doing binary classification (output is churn probability)
+            nn.Linear(32, 1)
+        )
+
+    def forward(self, x):
+        # Data passes through the network
+        # We do not use a Sigmoid layer here, because in PyTorch we will use
+        # BCEWithLogitsLoss, which is more numerically stable and includes Sigmoid internally!
+        return self.network(x)
+
+
+FILE: src/models/xgboost_model.py
+================================================================================
+# src/models/xgboost_model.py
+import xgboost as xgb
+
+def get_xgboost_model():
+    """
+    Initializes and returns an XGBoost model ready for training.
+    """
+    # We calculate the class weight based on  plot 1:
+    # (Number of customers staying / Number leaving) = approx. 5174 / 1869 ≈ 2.76
+    # This will help the model handle the minority class (churned customers) better
+
+    model = xgb.XGBClassifier(
+        n_estimators=100,  # Number of decision trees
+        max_depth=4,  # Maximum tree depth (prevents overfitting)
+        learning_rate=0.05,  # Learning rate
+        subsample=0.8,  # Uses 80% of data to build each tree
+        colsample_bytree=0.8,  # Uses 80% of features to build each tree
+        scale_pos_weight=2.76,  # Class balancing!
+        eval_metric="logloss",  # Evaluation metric during training
+        random_state=42,  # Ensures reproducibility
+        n_jobs=-1,  # Uses all CPU cores
+    )
+
+    return model
+
+
+FILE: src/utils/plotting.py
+================================================================================
+# src/utils/plotting.py
+import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+import xgboost as xgb
+from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score
+from src.config import BASE_DIR
+
+# Set a nice style for all plots
+sns.set_theme(style="whitegrid")
+
+def get_plots_dir():
+    """Ensures that the plots folder exists in the main project directory."""
+    plots_dir = os.path.join(BASE_DIR, "plots")
+    os.makedirs(plots_dir, exist_ok=True)
+    return plots_dir
+
+def plot_confusion_matrix(y_true, y_pred, model_name="model"):
+    """Generates and saves the confusion matrix."""
+    cm = confusion_matrix(y_true, y_pred)
+
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+                xticklabels=['Stays (0)', 'Leaves (1)'],
+                yticklabels=['Stays (0)', 'Leaves (1)'])
+    plt.ylabel('Reality')
+    plt.xlabel('Model Prediction')
+    plt.title(f'Confusion Matrix - {model_name.upper()}')
+    plt.tight_layout()
+
+    save_path = os.path.join(get_plots_dir(), f"{model_name.lower()}_confusion_matrix.png")
+    plt.savefig(save_path)
+    plt.close()
+
+def plot_roc_curve(y_true, y_probs, model_name="model"):
+    """Generates and saves the ROC-AUC curve."""
+    fpr, tpr, thresholds = roc_curve(y_true, y_probs)
+    auc_score = roc_auc_score(y_true, y_probs)
+
+    plt.figure(figsize=(6, 5))
+    plt.plot(fpr, tpr, label=f'ROC AUC = {auc_score:.3f}', color='darkorange', lw=2)
+    plt.plot([0, 1],[0, 1], color='navy', linestyle='--', lw=2)
+    plt.xlabel('False Positive Rate (FPR)')
+    plt.ylabel('True Positive Rate (TPR)')
+    plt.title(f'ROC Curve - {model_name.upper()}')
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+
+    save_path = os.path.join(get_plots_dir(), f"{model_name.lower()}_roc_curve.png")
+    plt.savefig(save_path)
+    plt.close()
+
+def plot_xgboost_importance(xgb_model, model_name="xgboost"):
+    """Generates and saves the feature importance plot for the XGBoost model."""
+    plt.figure(figsize=(10, 6))
+    xgb.plot_importance(xgb_model, max_num_features=10, importance_type='weight',
+                        title='XGBoost - Top 10 Most Important Features')
+    plt.tight_layout()
+
+    save_path = os.path.join(get_plots_dir(), "{model_name}_feature_importance.png")
+    plt.savefig(save_path)
+    plt.close()
+

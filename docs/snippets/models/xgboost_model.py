@@ -1,3 +1,4 @@
+# docs/snippets/models/xgboost_model.py
 import xgboost as xgb
 
 def get_xgboost_model():

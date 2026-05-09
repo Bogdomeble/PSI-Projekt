@@ -1,3 +1,4 @@
+# scripts/merge.py
 #!/usr/bin/env python3
 """
 Unified Project Code Collector
@@ -21,7 +22,9 @@ DEFAULT_IGNORE_DIRS = {
     ".git", ".svn", ".hg", "__pycache__", "node_modules",
     ".idea", ".vscode", ".vs", "build", "dist", "target",
     "venv", "env", ".env", "coverage", ".mypy_cache",
-    "bin", "obj", "public", ".next", # ,"test", "tests",
+    "bin", "obj", "public", ".next","__pycache__", "venv",
+    "data", "docs", "plots"
+     # ,"test", "tests",
 }
 
 DEFAULT_IGNORE_FILES = {
@@ -34,7 +37,7 @@ DEFAULT_IGNORE_FILES = {
     "postcss.config.js", "tailwind.config.js",
     "vite.config.ts", "vite.config.js",
     "jest.config.js", "jest-e2e.json",
-    "index.html", "favicon.ico", "merger.py",
+    "index.html", "favicon.ico", "merge.py", 
 }
 
 DEFAULT_EXTENSIONS = {
@@ -134,16 +137,20 @@ def has_comment(file: Path, rel: str) -> bool:
     return False
 
 
-def collect_files(root: Path, base: Path) -> List[Dict]:
+def collect_files(root: Path, base: Path, ignore_dirs: set = DEFAULT_IGNORE_DIRS) -> List[Dict]:
     collected = []
-    for item in root.rglob("*"):
-        if item.is_dir():
-            continue
+    # os.walk to ignore directories in the set
+    for item in root.iterdir():
         if item.name in DEFAULT_IGNORE_FILES:
+            continue
+        if item.is_dir():
+            if item.name in ignore_dirs:
+                continue
+            # use recursion to process directories properly 
+            collected.extend(collect_files(item, base, ignore_dirs))
             continue
         if not is_valid_file(item):
             continue
-
         rel = str(item.relative_to(base)).replace("\\", "/")
         if has_comment(item, rel):
             collected.append({

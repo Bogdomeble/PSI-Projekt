@@ -1,3 +1,4 @@
+# docs/snippets/prepare_data_splits.py
 def prepare_data_splits(df):
     X = df.drop(columns=[TARGET_COLUMN]).values
     y = df[TARGET_COLUMN].values
