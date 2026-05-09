@@ -59,3 +59,16 @@ def plot_xgboost_importance(xgb_model, model_name="xgboost"):
     save_path = os.path.join(get_plots_dir(), "{model_name}_feature_importance.png")
     plt.savefig(save_path)
     plt.close()
+
+def print_metrics_table(title, nn_res, xgb_res):
+    """Function to print metrics for both models"""
+    print("\n" + "="*55)
+    print(f" {title}")
+    print("="*55)
+    print(f"{'Metric':<15} | {'PyTorch (NN)':<15} | {'XGBoost':<15}")
+    print("-" * 55)
+    for metric in["Accuracy", "F1-Score", "Recall", "ROC-AUC"]:
+        nn_val = f"{nn_res[metric]:.4f}"
+        xgb_val = f"{xgb_res[metric]:.4f}"
+        print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15}")
+    print("="*55)

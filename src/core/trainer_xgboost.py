@@ -121,34 +121,31 @@ def train_and_eval_xgboost_with_feature_selection(
 
     print("XGBoost re-training finished!")
 
-    # Evaluate
-    preds = xgb_model_filtered.predict(X_test_filtered)
-    probs = xgb_model_filtered.predict_proba(X_test_filtered)[:, 1]
+    # evaluate on validation set
+    val_preds = xgb_model_filtered.predict(X_val_filtered)
+    val_probs = xgb_model_filtered.predict_proba(X_val_filtered)[:, 1]
+    val_results = {
+        "Accuracy": accuracy_score(xgb_data["y_val"], val_preds),
+        "F1-Score": f1_score(xgb_data["y_val"], val_preds),
+        "Recall": recall_score(xgb_data["y_val"], val_preds),
+        "ROC-AUC": roc_auc_score(xgb_data["y_val"], val_probs),
+    }
 
-    # Generate plots
-    plot_confusion_matrix(xgb_data["y_test"], preds, model_name="xgboost_filtered")
-    plot_roc_curve(xgb_data["y_test"], probs, model_name="xgboost_filtered")
+    # evaluate on test set
+    test_preds = xgb_model_filtered.predict(X_test_filtered)
+    test_probs = xgb_model_filtered.predict_proba(X_test_filtered)[:, 1]
+    test_results = {
+        "Accuracy": accuracy_score(xgb_data["y_test"], test_preds),
+        "F1-Score": f1_score(xgb_data["y_test"], test_preds),
+        "Recall": recall_score(xgb_data["y_test"], test_preds),
+        "ROC-AUC": roc_auc_score(xgb_data["y_test"], test_probs),
+        "top_features": top_features # we need to do this for the model export
+    }
+
+    # plots for the test set
+    plot_confusion_matrix(xgb_data["y_test"], test_preds, model_name="xgboost_filtered")
+    plot_roc_curve(xgb_data["y_test"], test_probs, model_name="xgboost_filtered")
     plot_xgboost_importance(xgb_model_filtered, model_name="xgboost_filtered")
 
-    # Compare with original (optional)
-    original_preds = xgb_model.predict(X_test_df)
-    original_probs = xgb_model.predict_proba(X_test_df)[:, 1]
-
-    results = {
-        "Accuracy": accuracy_score(xgb_data["y_test"], preds),
-        "F1-Score": f1_score(xgb_data["y_test"], preds),
-        "Recall": recall_score(xgb_data["y_test"], preds),
-        "ROC-AUC": roc_auc_score(xgb_data["y_test"], probs),
-        "original_accuracy": accuracy_score(xgb_data["y_test"], original_preds),
-        "features_used": n_keep,
-        "features_dropped": len(dropped_features),
-        "top_features": top_features,
-    }
-    if verbose:
-        print("\nPerformance Comparison:")
-        print(f"   Original Accuracy: {results['original_accuracy']:.4f}")
-        print(f"   Filtered Accuracy: {results['Accuracy']:.4f}")
-        improvement = results["Accuracy"] - results["original_accuracy"]
-        print(f"   {'Improvement' if improvement > 0 else 'Slight decrease'}: {improvement:+.4f}")
-
-    return results
+    # return all results
+    return xgb_model_filtered, val_results, test_results

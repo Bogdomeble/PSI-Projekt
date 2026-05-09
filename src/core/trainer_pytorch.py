@@ -45,25 +45,26 @@ def train_pytorch(
     return model
 
 
-def evaluate_pytorch(model, test_loader, device, threshold=0.5):
+def evaluate_pytorch(model, data_loader, device, threshold=0.5, save_plots=True):
     model.eval()
-    y_true, y_pred, y_probs = [], [], []
+    y_true, y_pred, y_probs = [], [],[]
 
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in data_loader:
             X_batch = X_batch.to(device)
             outputs = model(X_batch)
 
             probs = torch.sigmoid(outputs)
-            preds = (probs > threshold).float()  # Dynamic classification threshold
+            preds = (probs > threshold).float()
 
             y_true.extend(y_batch.numpy())
             y_pred.extend(preds.cpu().numpy())
             y_probs.extend(probs.cpu().numpy())
 
-    # Generate plots using our new module
-    plot_confusion_matrix(y_true, y_pred, model_name="pytorch")
-    plot_roc_curve(y_true, y_probs, model_name="pytorch")
+    # check if we want to save plots - based on function flag, defaults to true
+    if save_plots:
+        plot_confusion_matrix(y_true, y_pred, model_name="pytorch")
+        plot_roc_curve(y_true, y_probs, model_name="pytorch")
 
     return {
         "Accuracy": accuracy_score(y_true, y_pred),
