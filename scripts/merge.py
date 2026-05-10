@@ -23,7 +23,7 @@ DEFAULT_IGNORE_DIRS = {
     ".idea", ".vscode", ".vs", "build", "dist", "target",
     "venv", "env", ".env", "coverage", ".mypy_cache",
     "bin", "obj", "public", ".next","__pycache__", "venv",
-    "data", "docs", "plots"
+    "data", "docs", "plots", "exported-models"
      # ,"test", "tests",
 }
 

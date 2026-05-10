@@ -1,3 +1,6 @@
+#uv
+
+uv
 
 # Przetwarzanie danych
 pandas>=2.0.0
@@ -18,5 +21,11 @@ matplotlib>=3.7.0
 seaborn>=0.12.0
 
 #optymalizacja hiperparametrów modeli - zeby nie robic tego recznie
-optuna>=4.8.0
+optuna>=4.8.0 #nieżywamy tego chyba już
 joblib
+
+
+# aplikacja na kamień 5
+streamlit
+
+

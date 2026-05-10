@@ -1,8 +1,9 @@
 PROJECT CODE DUMP
-FILES: 12
+FILES: 13
 ================================================================================
 
 INDEX:
+app/app.py
 pyproject.toml
 scripts/analyse.py
 scripts/torchviz.py
@@ -17,6 +18,146 @@ src/models/xgboost_model.py
 src/utils/plotting.py
 
 ================================================================================
+
+FILE: app/app.py
+================================================================================
+# app/app.py
+# app.py
+
+import sys
+import os
+
+#this fixes path errors when using streamlit run app/app.py - maybe we need to change the name here?
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import streamlit as st
+import pandas as pd
+import torch
+import joblib
+import xgboost as xgb
+import json
+import numpy as np
+
+# pytorch model import
+from src.models.neural_net import ChurnNeuralNet
+
+st.set_page_config(page_title="Telco Churn Predictor", layout="centered")
+
+# --- load models and scaler - only once using @st.cache_resource ---
+@st.cache_resource
+def load_assets():
+    # load tensors for both models
+    with open("exported-models/columns.json", "r") as f:
+        full_columns = json.load(f)
+
+   
+    with open("exported-models/xgb_columns.json", "r") as f:
+        xgb_columns = json.load(f)
+        
+    scaler = joblib.load("exported-models/scaler.pkl")
+    
+    # load trained pytorch model (check dimension)
+    input_dim = len(full_columns)
+    nn_model = ChurnNeuralNet(input_dim)
+    nn_model.load_state_dict(torch.load("exported-models/nn_model.pt", map_location=torch.device('cpu')))
+    nn_model.eval()
+    
+    # load XGBoost classifier from xgb_model.json
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model("exported-models/xgb_model.json")
+    
+    return nn_model, xgb_model, scaler, full_columns, xgb_columns
+
+nn_model, xgb_model, scaler, full_columns, xgb_columns = load_assets()
+
+# simple user form
+st.title("Panel Predykcji Odejścia Klienta (Churn)")
+st.write("Wprowadź dane klienta, aby sprawdzić, czy zrezygnuje z usług naszej sieci.")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    tenure = st.slider("Czas trwania umowy (miesiące)", 0, 72, 12)
+    monthly_charges = st.number_input("Miesięczne opłaty ($)", min_value=0.0, max_value=200.0, value=50.0)
+    total_charges = st.number_input("Całkowite opłaty ($)", min_value=0.0, max_value=10000.0, value=500.0)
+    contract = st.selectbox("Typ kontraktu",["Month-to-month", "One year", "Two year"])
+
+with col2:
+    internet = st.selectbox("Internet",["DSL", "Fiber optic", "No"])
+    tech_support = st.radio("Wsparcie techniczne?",["Yes", "No", "No internet service"])
+    payment_method = st.selectbox("Metoda płatności",[
+        "Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"
+    ])
+
+# process data with st.button
+if st.button("Przewiduj Churn", type="primary", use_container_width=True):
+    
+    # build raw dataframe from input data
+    input_dict = {
+        "tenure": [tenure],
+        "MonthlyCharges": [monthly_charges],
+        "TotalCharges":[total_charges],
+        "Contract": [contract],
+        "InternetService": [internet],
+        "TechSupport": [tech_support],
+        "PaymentMethod": [payment_method]
+    }
+    input_df = pd.DataFrame(input_dict)
+    
+    # One-Hot Encoding
+    input_df = pd.get_dummies(input_df)
+    
+    # fill empty columns with null-values
+    for col in full_columns:
+        if col not in input_df.columns:
+            input_df[col] = 0
+            
+    # check sizes before and after training
+    input_df = input_df[full_columns] 
+
+    # scale the data with the standardScaler (Skaler wymaga 30 cech!)
+    input_scaled = scaler.transform(input_df)
+
+    # --- inference ---
+    
+    # pytorch uses all 30 variables
+    X_tensor = torch.tensor(input_scaled, dtype=torch.float32)
+    with torch.no_grad():
+        nn_output = nn_model(X_tensor)
+        nn_prob = torch.sigmoid(nn_output).item()
+
+    # xgboost only need the slim 18 variables
+    # get the indexes from the columns
+    xgb_indices = [full_columns.index(col) for col in xgb_columns]
+    xgb_input_scaled = input_scaled[:, xgb_indices] # get the needed 18 columns
+    
+    xgb_prob = xgb_model.predict_proba(xgb_input_scaled)[0][1]
+
+
+    # results
+    st.markdown("---")
+    st.subheader("Wyniki modeli:")
+    
+    res_col1, res_col2 = st.columns(2)
+    
+    # print pytorch results
+    with res_col1:
+        st.write("**Sieć Neuronowa (PyTorch)**")
+        st.metric(label="Ryzyko odejścia", value=f"{nn_prob*100:.1f}%")
+        if nn_prob > 0.4: # threshold from the tweaks
+            st.error("Wysokie ryzyko odejścia!")
+        else:
+            st.success("Klient raczej zostanie.")
+
+    #  XGboost results
+    with res_col2:
+        st.write("**XGBoost Classifier**")
+        st.metric(label="Ryzyko odejścia", value=f"{xgb_prob*100:.1f}%")
+        if xgb_prob > 0.5:
+            st.error("Wysokie ryzyko odejścia!")
+        else:
+            st.success("Klient raczej zostanie.")
 
 FILE: pyproject.toml
 ================================================================================
@@ -313,25 +454,26 @@ def train_pytorch(
     return model
 
 
-def evaluate_pytorch(model, test_loader, device, threshold=0.5):
+def evaluate_pytorch(model, data_loader, device, threshold=0.5, save_plots=True):
     model.eval()
-    y_true, y_pred, y_probs = [], [], []
+    y_true, y_pred, y_probs = [], [],[]
 
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in data_loader:
             X_batch = X_batch.to(device)
             outputs = model(X_batch)
 
             probs = torch.sigmoid(outputs)
-            preds = (probs > threshold).float()  # Dynamic classification threshold
+            preds = (probs > threshold).float()
 
             y_true.extend(y_batch.numpy())
             y_pred.extend(preds.cpu().numpy())
             y_probs.extend(probs.cpu().numpy())
 
-    # Generate plots using our new module
-    plot_confusion_matrix(y_true, y_pred, model_name="pytorch")
-    plot_roc_curve(y_true, y_probs, model_name="pytorch")
+    # check if we want to save plots - based on function flag, defaults to true
+    if save_plots:
+        plot_confusion_matrix(y_true, y_pred, model_name="pytorch")
+        plot_roc_curve(y_true, y_probs, model_name="pytorch")
 
     return {
         "Accuracy": accuracy_score(y_true, y_pred),
@@ -484,37 +626,34 @@ def train_and_eval_xgboost_with_feature_selection(
 
     print("XGBoost re-training finished!")
 
-    # Evaluate
-    preds = xgb_model_filtered.predict(X_test_filtered)
-    probs = xgb_model_filtered.predict_proba(X_test_filtered)[:, 1]
+    # evaluate on validation set
+    val_preds = xgb_model_filtered.predict(X_val_filtered)
+    val_probs = xgb_model_filtered.predict_proba(X_val_filtered)[:, 1]
+    val_results = {
+        "Accuracy": accuracy_score(xgb_data["y_val"], val_preds),
+        "F1-Score": f1_score(xgb_data["y_val"], val_preds),
+        "Recall": recall_score(xgb_data["y_val"], val_preds),
+        "ROC-AUC": roc_auc_score(xgb_data["y_val"], val_probs),
+    }
 
-    # Generate plots
-    plot_confusion_matrix(xgb_data["y_test"], preds, model_name="xgboost_filtered")
-    plot_roc_curve(xgb_data["y_test"], probs, model_name="xgboost_filtered")
+    # evaluate on test set
+    test_preds = xgb_model_filtered.predict(X_test_filtered)
+    test_probs = xgb_model_filtered.predict_proba(X_test_filtered)[:, 1]
+    test_results = {
+        "Accuracy": accuracy_score(xgb_data["y_test"], test_preds),
+        "F1-Score": f1_score(xgb_data["y_test"], test_preds),
+        "Recall": recall_score(xgb_data["y_test"], test_preds),
+        "ROC-AUC": roc_auc_score(xgb_data["y_test"], test_probs),
+        "top_features": top_features # we need to do this for the model export
+    }
+
+    # plots for the test set
+    plot_confusion_matrix(xgb_data["y_test"], test_preds, model_name="xgboost_filtered")
+    plot_roc_curve(xgb_data["y_test"], test_probs, model_name="xgboost_filtered")
     plot_xgboost_importance(xgb_model_filtered, model_name="xgboost_filtered")
 
-    # Compare with original (optional)
-    original_preds = xgb_model.predict(X_test_df)
-    original_probs = xgb_model.predict_proba(X_test_df)[:, 1]
-
-    results = {
-        "Accuracy": accuracy_score(xgb_data["y_test"], preds),
-        "F1-Score": f1_score(xgb_data["y_test"], preds),
-        "Recall": recall_score(xgb_data["y_test"], preds),
-        "ROC-AUC": roc_auc_score(xgb_data["y_test"], probs),
-        "original_accuracy": accuracy_score(xgb_data["y_test"], original_preds),
-        "features_used": n_keep,
-        "features_dropped": len(dropped_features),
-        "top_features": top_features,
-    }
-    if verbose:
-        print("\nPerformance Comparison:")
-        print(f"   Original Accuracy: {results['original_accuracy']:.4f}")
-        print(f"   Filtered Accuracy: {results['Accuracy']:.4f}")
-        improvement = results["Accuracy"] - results["original_accuracy"]
-        print(f"   {'Improvement' if improvement > 0 else 'Slight decrease'}: {improvement:+.4f}")
-
-    return results
+    # return all results
+    return xgb_model_filtered, val_results, test_results
 
 
 FILE: src/dataset.py
@@ -527,7 +666,8 @@ from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from src.config import *
-
+import joblib 
+import json 
 
 def load_and_clean_data(filepath):
     print(f"Reading data from: {filepath}")
@@ -559,8 +699,6 @@ def prepare_data_splits(df):
     X = df.drop(columns=[TARGET_COLUMN]).values
     y = df[TARGET_COLUMN].values
 
-    # Divide the data into train,test,validate subsets
-
     X_temp, X_test, y_temp, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
@@ -570,14 +708,13 @@ def prepare_data_splits(df):
         X_temp, y_temp, test_size=val_ratio, random_state=RANDOM_STATE, stratify=y_temp
     )
 
-    # scale data for NNs
-
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_val = scaler.transform(X_val)
     X_test = scaler.transform(X_test)
 
-    return (X_train, y_train), (X_val, y_val), (X_test, y_test)
+    # also return the scaler at the end
+    return (X_train, y_train), (X_val, y_val), (X_test, y_test), scaler
 
 class ChurnDataset(Dataset):
     def __init__(self, X, y):
@@ -595,59 +732,63 @@ class ChurnDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 def get_dataloaders():
-
     df = load_and_clean_data(RAW_DATA_PATH)
-
     feature_names = df.drop(columns=[TARGET_COLUMN]).columns.tolist()
 
-    #save modified data to temporaty file
-
+    # check if directory exists
+    os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
     df.to_csv(PROCESSED_DATA_PATH, index=False)
 
-    (X_train, y_train), (X_val, y_val), (X_test, y_test) = prepare_data_splits(df)
+    # get scaler from function
+    (X_train, y_train), (X_val, y_val), (X_test, y_test), scaler = prepare_data_splits(df)
 
+    # save the columns and the scaler
+    export_dir = os.path.join(BASE_DIR, "exported-models")
+    os.makedirs(export_dir, exist_ok=True)
+    
+    joblib.dump(scaler, os.path.join(export_dir, "scaler.pkl"))
+    with open(os.path.join(export_dir, "columns.json"), "w") as f:
+        json.dump(feature_names, f)
+
+    # scaler weights - these stay the same
     class_sample_count = np.array([len(np.where(y_train == t)[0]) for t in np.unique(y_train)])
-    weight = 1. / class_sample_count # if the ammount of variables in each class is different, we need to adjust the weight
+    weight = 1. / class_sample_count
     samples_weight = np.array([weight[int(t)] for t in y_train])
-
-
     samples_weight = torch.from_numpy(samples_weight).double()
     sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
 
-    # Dataloaders for python
-
-    train_loader = DataLoader(ChurnDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=False,drop_last=True)
-    # instead of shuffle=True, we use the sampler to ensure balanced sampling, set to True if results are worse
-    """drop_last=True fixes the Expected more than 1 value per channel when training, got input size torch.Size([1, 64])"""
+    train_loader = DataLoader(ChurnDataset(X_train, y_train), batch_size=BATCH_SIZE, sampler=sampler, drop_last=True)
     val_loader = DataLoader(ChurnDataset(X_val, y_val), batch_size=BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(ChurnDataset(X_test, y_test), batch_size=BATCH_SIZE, shuffle=False)
-
-    # XGboost dictionary for the selected training sets
 
     xgb_data = {
         "X_train": X_train, "y_train": y_train,
         "X_val": X_val, "y_val": y_val,
         "X_test": X_test, "y_test": y_test,
-        "feature_names": feature_names  # <--- this is for the xgboost plot file
+        "feature_names": feature_names
     }
-
-    # we return input_dims here
 
     input_dim = X_train.shape[1]
 
     return train_loader, val_loader, test_loader, xgb_data, input_dim
 
-
 FILE: src/main.py
 ================================================================================
 # src/main.py
+import os
+import json
+import torch
+from torchinfo import summary
+
 from src.dataset import get_dataloaders
 from src.models.neural_net import ChurnNeuralNet
 from src.models.xgboost_model import get_xgboost_model
 from src.core.trainer_pytorch import train_pytorch, evaluate_pytorch
-from src.core.trainer_xgboost import train_and_eval_xgboost, train_and_eval_xgboost_with_feature_selection
+from src.core.trainer_xgboost import train_and_eval_xgboost_with_feature_selection
 from src.config import DEVICE, BATCH_SIZE, EPOCHS, LEARNING_RATE, XGBOOST_DROP_PERCENT
-from torchinfo import summary
+
+from src.utils.plotting import print_metrics_table
+
 
 def main():
     print("=========================================")
@@ -658,45 +799,51 @@ def main():
         train_loader, val_loader, test_loader, xgb_data, input_dim = get_dataloaders()
 
         nn_model = ChurnNeuralNet(input_dim).to(DEVICE)
-        xgb_model = get_xgboost_model()
+        xgb_model_raw = get_xgboost_model()
 
-        # PYTORCH TRAINING - with added weight 2.76 for the Churn class
+        # --- PYTORCH ---
         nn_model = train_pytorch(
             nn_model, train_loader, val_loader, DEVICE,
             EPOCHS, LEARNING_RATE, pos_weight_val=2.76
         )
+        
+        # evaluate on validation set without saving plots
+        nn_val_results = evaluate_pytorch(nn_model, val_loader, DEVICE, threshold=0.4, save_plots=False)
+        # evaluate on test set with saving plots
+        nn_test_results = evaluate_pytorch(nn_model, test_loader, DEVICE, threshold=0.4, save_plots=True)
 
-        # PYTORCH EVALUATION - with lowered threshold to 0.4 (better recall for imbalanced data)
-        nn_results = evaluate_pytorch(nn_model, test_loader, DEVICE, threshold=0.4)
 
-        # XGBOOST TRAINING AND EVALUATION
-        #xgb_results = train_and_eval_xgboost(xgb_model, xgb_data)
-
-        # XGBOOST RE-TRAINING WITH FEATURE DROPPING
-        xgb_results = train_and_eval_xgboost_with_feature_selection(
-            xgb_model, xgb_data,
+        # --- XGBOOST ---
+        #  get the filtered model and results for the test and validation sets
+        xgb_model_filtered, xgb_val_results, xgb_test_results = train_and_eval_xgboost_with_feature_selection(
+            xgb_model_raw, xgb_data,
             drop_percent=XGBOOST_DROP_PERCENT,
         )
 
         print(f"\nAfter training (PyTorch):\n")
         summary(nn_model, input_size=(BATCH_SIZE, input_dim))
 
-        # ==========================================
-        # Results summary
-        # ==========================================
-        print("\n" + "="*55)
-        print(" Final results (test set)")
-        print("="*55)
-        print(f"{'Metric':<15} | {'PyTorch (NN)':<15} | {'XGBoost':<15}")
-        print("-" * 55)
 
-        # Added ROC-AUC to the list of metrics
-        for metric in["Accuracy", "F1-Score", "Recall", "ROC-AUC"]:
-            nn_val = f"{nn_results[metric]:.4f}"
-            xgb_val = f"{xgb_results[metric]:.4f}"
-            print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15}")
+        # --- print results ---
+        print_metrics_table("RESULTS: VALIDATION SET", nn_val_results, xgb_val_results)
+        print_metrics_table("RESULTS: TEST SET", nn_test_results, xgb_test_results)
 
-        print("="*55)
+
+        # --- export the models ---
+        export_dir = "exported-models"
+        os.makedirs(export_dir, exist_ok=True) 
+
+        # torch.save(...) for the neural network model
+        torch.save(nn_model.state_dict(), os.path.join(export_dir, "nn_model.pt"))
+        
+        # model.save_model(...) for the xgboost .json model
+        xgb_model_filtered.save_model(os.path.join(export_dir, "xgb_model.json"))
+        
+        # get the columns for xgboost to interpret correctly
+        with open(os.path.join(export_dir, "xgb_columns.json"), "w") as f:
+            json.dump(xgb_test_results["top_features"], f)
+            
+        print(f"\n[Success] Models exported to directory: '{export_dir}/'")
 
     except FileNotFoundError:
         print("\n[Error] File not found! Make sure it is in data/raw/")
@@ -705,7 +852,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 FILE: src/models/neural_net.py
 ================================================================================
@@ -836,3 +982,15 @@ def plot_xgboost_importance(xgb_model, model_name="xgboost"):
     plt.savefig(save_path)
     plt.close()
 
+def print_metrics_table(title, nn_res, xgb_res):
+    """Function to print metrics for both models"""
+    print("\n" + "="*55)
+    print(f" {title}")
+    print("="*55)
+    print(f"{'Metric':<15} | {'PyTorch (NN)':<15} | {'XGBoost':<15}")
+    print("-" * 55)
+    for metric in["Accuracy", "F1-Score", "Recall", "ROC-AUC"]:
+        nn_val = f"{nn_res[metric]:.4f}"
+        xgb_val = f"{xgb_res[metric]:.4f}"
+        print(f"{metric:<15} | {nn_val:<15} | {xgb_val:<15}")
+    print("="*55)
