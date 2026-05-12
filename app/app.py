@@ -30,7 +30,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
+if 'nn_prob' not in st.session_state:
+    st.session_state.nn_prob = None
+    st.session_state.xgb_prob = None
 # --- load models and scaler - only once using @st.cache_resource ---
 @st.cache_resource
 def load_assets():
@@ -67,6 +69,7 @@ def calc_churn():
     input_df['tenure'] = st.session_state['tenure']
     input_df['MonthlyCharges'] = st.session_state['monthly_charges']
     input_df['TotalCharges'] = st.session_state['total_charges']
+    input_df['SeniorCitizen'] = 1.0 if "Senior" in st.session_state['miscdata'] else 0.0
 
     # manual one-hot encoding - this needs to be changed for scaling purposes
     # for every choice/column append data to dataframe
@@ -76,7 +79,18 @@ def calc_churn():
         "Contract": st.session_state['contract'],
         "InternetService": st.session_state['internet'],
         "TechSupport": st.session_state['tech_support'],
-        "PaymentMethod":  st.session_state['payment_method']
+        "PaymentMethod":  st.session_state['payment_method'],
+        "gender" : st.session_state['gender'],
+        "OnlineSecurity": st.session_state['online_security'],
+        "OnlineBackup": st.session_state['online_backup'],
+        "DeviceProtection": st.session_state['device_protection'],
+        "StreamingTV": st.session_state['stream_tv'],
+        "StreamingMovies": st.session_state['stream_movie'],
+        "MultipleLines": st.session_state['multiple_lines'],
+        "Partner" : "Yes" if "Has a Partner" in st.session_state['miscdata'] else "No",
+        "Dependents" : "Yes" if "Has Dependents" in st.session_state['miscdata'] else "No",
+        "PhoneService": "Yes" if st.session_state['phone_service'] else "No",
+        "PaperlessBilling": "Yes" if st.session_state['paperless_billing'] else "No",
     }
 
     for feature, value in categorical_choices.items():
@@ -149,25 +163,9 @@ def calc_churn():
 
     xgb_prob = xgb_model.predict_proba(xgb_input_scaled)[0][1]
 
+    st.session_state.nn_prob = nn_prob
+    st.session_state.xgb_prob = xgb_prob
 
-    with output_side:
-
-        a, b = st.columns(2)
-        # PyTorch
-        st.write("**Sieć Neuronowa (PyTorch)**")
-        st.metric(label="Ryzyko odejścia", value=f"{nn_prob*100:.1f}%")
-        if nn_prob > 0.4: # the modified threshold
-            st.error("Wysokie ryzyko odejścia!")
-        else:
-            st.success("Klient raczej zostanie.")
-
-        # XGBoost
-        st.write("**XGBoost Classifier**")
-        st.metric(label="Ryzyko odejścia", value=f"{xgb_prob*100:.1f}%")
-        if xgb_prob > 0.5:
-            st.error("Wysokie ryzyko odejścia!")
-        else:
-            st.success("Klient raczej zostanie.")
 
 
 # simple user form
@@ -186,7 +184,7 @@ with config_side:
         )
 
     with col2:
-        internet = st.segmented_control(
+        internet = st.selectbox(
             "Internet",["DSL", "Fiber optic", "No"],
             key='internet'
         )
@@ -223,8 +221,8 @@ with config_side:
         )
     with col2:
         gender = st.segmented_control(
-            "Płeć", ["Male", "Female"],
-            key='gender_data'
+            "Płeć", ["Male", "Female"], default="Male",
+            key='gender'
         )
 
     col1, col2, col3,col4 = st.columns(4)
@@ -238,43 +236,67 @@ with config_side:
     with col2:
         online_sec = st.segmented_control(
             "Ochrona Online?",y_n_nis,
-            key='online_security'
+            key='online_security', default="No"
         )
 
     with col3:
         online_backup = st.segmented_control(
             "Online Backup?",y_n_nis,
-            key='online_backup'
+            key='online_backup', default="No"
         )
 
     with col4:
         device_protection = st.segmented_control(
             "Ochrona urządzeń?",y_n_nis,
-            key='device_protection'
+            key='device_protection', default="No"
         )
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         stream_tv = st.segmented_control(
             "Streaming TV?",y_n_nis,
-            key='stream_tv'
+            key='stream_tv', default="No"
         )
 
     with col2:
         stream_movie = st.segmented_control(
             "Streaming filmów?",y_n_nis,
-            key='stream_movie'
+            key='stream_movie', default="No"
         )
     with col3:
         multiple_lines = st.segmented_control(
             "Kilka linii?", ["Yes", "No", "No phone service"],
-            key='multiple_lines'
+            key='multiple_lines', default="No"
         )
     with col4:
         phoneService = st.checkbox(
             "Phone service?", key="phone_service"
         )
+        paperlessBilling = st.checkbox(
+            "Paperless billing?", key="paperless_billing"
+        )
 
 
     # process data with st.button
     st.button("Przewiduj Churn", type="primary", use_container_width=True, on_click=calc_churn)
+
+    with output_side:
+        nn_prob = st.session_state['nn_prob']
+        if(nn_prob is not None):
+
+            a, b = st.columns(2)
+            # PyTorch
+            st.write("**Sieć Neuronowa (PyTorch)**")
+            st.metric(label="Ryzyko odejścia", value=f"{nn_prob*100:.1f}%")
+            if nn_prob > 0.4: # the modified threshold
+                st.error("Wysokie ryzyko odejścia!")
+            else:
+                st.success("Klient raczej zostanie.")
+            xgb_prob = st.session_state['xgb_prob']
+            # XGBoost
+            st.write("**XGBoost Classifier**")
+            st.metric(label="Ryzyko odejścia", value=f"{xgb_prob*100:.1f}%")
+            if xgb_prob > 0.5:
+                st.error("Wysokie ryzyko odejścia!")
+            else:
+                st.success("Klient raczej zostanie.")
