@@ -122,47 +122,6 @@ def calc_churn():
 
     xgb_prob = xgb_model.predict_proba(xgb_input_scaled)[0][1]
 
-    # build raw dataframe from input data
-    input_dict = {
-        "tenure": [tenure],
-        "MonthlyCharges": [monthly_charges],
-        "TotalCharges":[total_charges],
-        "Contract": [contract],
-        "InternetService": [internet],
-        "TechSupport": [tech_support],
-        "PaymentMethod": [payment_method]
-    }
-    input_df = pd.DataFrame(input_dict)
-
-    # One-Hot Encoding
-    input_df = pd.get_dummies(input_df)
-
-    # fill empty columns with null-values
-    for col in full_columns:
-        if col not in input_df.columns:
-            input_df[col] = 0
-
-    # check sizes before and after training
-    input_df = input_df[full_columns]
-
-    # scale the data with the standardScaler (Skaler wymaga 30 cech!)
-    input_scaled = scaler.transform(input_df)
-
-    # --- inference ---
-
-    # pytorch uses all 30 variables
-    X_tensor = torch.tensor(input_scaled, dtype=torch.float32)
-    with torch.no_grad():
-        nn_output = nn_model(X_tensor)
-        nn_prob = torch.sigmoid(nn_output).item()
-
-    # xgboost only need the slim 18 variables
-    # get the indexes from the columns
-    xgb_indices = [full_columns.index(col) for col in xgb_columns]
-    xgb_input_scaled = input_scaled[:, xgb_indices] # get the needed 18 columns
-
-    xgb_prob = xgb_model.predict_proba(xgb_input_scaled)[0][1]
-
     st.session_state.nn_prob = nn_prob
     st.session_state.xgb_prob = xgb_prob
 

@@ -64,3 +64,10 @@ python3 -m src.main
 ```
 
 Jeśli konfiguracja przebiegła pomyślnie, w konsoli pojawi się informacja o używanym urządzeniu (CPU/CUDA) oraz wymiary przygotowanych zbiorów danych gotowych do treningu modeli.
+
+### 6. Uruchomienie aplikacji 
+Aby uruchomić aplikację webową pozwalającą na użycie modelu do predykcji na podstawie wprowadzonych przez użytkownika danych:
+
+```bash
+streamlit run app/app.py
+```
